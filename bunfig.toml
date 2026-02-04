@@ -1,0 +1,12 @@
+
+[install]
+frozenLockfile = true
+
+[build]
+target = "bun"
+minify = true
+sourcemap = "external"
+
+
+[alias]
+"@" = "./src/"
