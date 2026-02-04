@@ -14,9 +14,31 @@ const schema = z.object({
   OTLP_HTTP_URL: z.string().url().optional(),
   FRONTEND_URL: z.string().url().optional(),
 
-  // TigerBeetle
+  // TigerBeetle (Legacy - being replaced by PostgreSQL Ledger)
   TIGERBEETLE_CLUSTER_ID: z.coerce.number().default(0),
   TIGERBEETLE_REPLICA_ADDRESSES: z.string().default("3000"), // Comma separated
+
+  // PostgreSQL Ledger Database
+  POSTGRES_LEDGER_URL: z.string().url().default("postgresql://localhost:5432/fintech_ledger"),
+  POSTGRES_POOL_SIZE: z.coerce.number().default(20),
+
+  // Worker Configuration
+  WORKER_PORT: z.coerce.number().default(4001),
+  WORKER_CONCURRENCY: z.coerce.number().default(5),
+
+  // Cron Job Configuration
+  CRON_SETTLEMENT_ENABLED: z.preprocess(
+    (v) => (typeof v === "string" ? v === "true" : v),
+    z.boolean().default(true)
+  ),
+  CRON_RECONCILIATION_ENABLED: z.preprocess(
+    (v) => (typeof v === "string" ? v === "true" : v),
+    z.boolean().default(true)
+  ),
+  CRON_SNAPSHOT_ENABLED: z.preprocess(
+    (v) => (typeof v === "string" ? v === "true" : v),
+    z.boolean().default(true)
+  ),
 
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().default(587),
@@ -75,6 +97,16 @@ export const ENV: Env = schema.parse({
 
   TIGERBEETLE_CLUSTER_ID: process.env.TIGERBEETLE_CLUSTER_ID,
   TIGERBEETLE_REPLICA_ADDRESSES: process.env.TIGERBEETLE_REPLICA_ADDRESSES,
+
+  POSTGRES_LEDGER_URL: process.env.POSTGRES_LEDGER_URL,
+  POSTGRES_POOL_SIZE: process.env.POSTGRES_POOL_SIZE,
+
+  WORKER_PORT: process.env.WORKER_PORT,
+  WORKER_CONCURRENCY: process.env.WORKER_CONCURRENCY,
+
+  CRON_SETTLEMENT_ENABLED: process.env.CRON_SETTLEMENT_ENABLED,
+  CRON_RECONCILIATION_ENABLED: process.env.CRON_RECONCILIATION_ENABLED,
+  CRON_SNAPSHOT_ENABLED: process.env.CRON_SNAPSHOT_ENABLED,
 
   SMTP_HOST: process.env.SMTP_HOST,
   SMTP_PORT: process.env.SMTP_PORT,

@@ -7,10 +7,12 @@ This document provides comprehensive guidance for AI assistants working with thi
 **fintech-bun-hono** is a multi-instance fintech payment platform backend built with Bun and Hono. It handles payment processing (payin/payout), merchant management, and administrative operations for a payment gateway service.
 
 ### Key Characteristics
-- **Multi-instance architecture**: Separate API (port 4000) and Payment (port 3000) services
-- **Double-entry accounting**: TigerBeetle ledger for financial transactions
+- **Multi-instance architecture**: Separate API (port 4000), Payment (port 3000), and Worker (port 4001) services
+- **Dual database design**: MongoDB for business data, PostgreSQL for ledger/accounting
+- **Double-entry accounting**: PostgreSQL-based banking-grade ledger system
 - **Multi-provider support**: Pluggable payment gateway integrations (AlphaPay, Razorpay)
 - **Enterprise security**: IP whitelisting, Argon2 hashing, JWT auth, audit logging
+- **Background processing**: Worker instance with cron jobs for settlements and reconciliation
 
 ## Tech Stack
 
@@ -19,8 +21,8 @@ This document provides comprehensive guidance for AI assistants working with thi
 | Runtime | Bun 1.3.1 |
 | Framework | Hono 4.6.0 |
 | Language | TypeScript 5.6.3 (strict mode) |
-| Primary DB | MongoDB 6.10 with Mongoose 8.19 |
-| Ledger DB | TigerBeetle (double-entry accounting) |
+| Business DB | MongoDB 6.10 with Mongoose 8.19 |
+| Ledger DB | PostgreSQL (banking-grade double-entry) |
 | Cache | Redis (ioredis 5.8) |
 | Validation | Zod 3.23 |
 | Auth | JWT + Argon2 |
@@ -31,9 +33,12 @@ This document provides comprehensive guidance for AI assistants working with thi
 
 ```
 src/
-├── instances/           # Entry points (api.ts, payment.ts)
+├── instances/           # Entry points
+│   ├── api.ts           # API service (port 4000)
+│   ├── payment.ts       # Payment service (port 3000)
+│   └── worker.ts        # Background worker (port 4001)
 ├── app.ts               # Hono app factory with middleware stack
-├── bootstrap.ts         # Service initialization
+├── bootstrap.ts         # Service initialization (MongoDB + PostgreSQL)
 ├── config/              # Environment and provider credentials
 ├── routes/              # API route definitions
 │   ├── admin/           # Admin portal routes
@@ -45,13 +50,19 @@ src/
 │   ├── admin/           # Admin services
 │   ├── merchant/        # Merchant services
 │   ├── payment/         # Payment processing
-│   ├── ledger/          # TigerBeetle integration
+│   ├── ledger/          # TigerBeetle integration (legacy)
+│   ├── ledger-pg/       # PostgreSQL ledger services (NEW)
+│   ├── worker/          # Background job services
 │   └── analytics/       # Reporting services
-├── models/              # Mongoose schemas
+├── models/              # Mongoose schemas (MongoDB)
 ├── repositories/        # Data access layer
 ├── dto/                 # Zod validation schemas
 ├── middlewares/         # HTTP middleware
-├── infra/               # Infrastructure (DB, Redis, OTEL, Email)
+├── infra/               # Infrastructure
+│   ├── mongoose-instance.ts  # MongoDB connection
+│   ├── postgres/        # PostgreSQL connection & migrations
+│   ├── redis-instance.ts     # Redis connection
+│   └── otel-sdk.ts      # OpenTelemetry setup
 ├── providers/           # Payment gateway integrations
 ├── constants/           # Application constants
 ├── types/               # TypeScript type definitions
@@ -62,20 +73,82 @@ src/
 
 ```bash
 # Development (watch mode)
-npm run dev              # Both services concurrently
+npm run dev              # All services (API, Payment, Worker)
 npm run dev:api          # API service only
 npm run dev:payment      # Payment service only
+npm run dev:worker       # Worker service only
 
 # Build
-npm run build            # Build both services
+npm run build            # Build all services
 npm run build:api        # Build API only
 npm run build:payment    # Build Payment only
+npm run build:worker     # Build Worker only
 
 # Production
-npm run start            # Run built bundles
+npm run start            # Run all built services
+npm run start:services   # Run API and Payment only (without worker)
+
+# Database
+npm run db:migrate       # Run PostgreSQL migrations
 
 # Type checking
 npm run typecheck        # TypeScript validation
+```
+
+## Database Architecture
+
+### Dual Database Design
+
+This project uses **two databases** with clear separation of concerns:
+
+| Database | Purpose | Data Types |
+|----------|---------|------------|
+| MongoDB | Business data | Merchants, Admins, Transactions (metadata), Providers, etc. |
+| PostgreSQL | Financial ledger | Accounts, Transfers, Entries, Settlements, Reconciliation |
+
+### PostgreSQL Ledger Schema
+
+The ledger system implements **banking-grade double-entry accounting**:
+
+```sql
+-- Core Tables
+ledger_accounts       -- All financial accounts with real-time balances
+ledger_entries        -- Immutable journal entries (audit trail)
+ledger_transfers      -- Double-entry transfers (debit + credit)
+balance_snapshots     -- Daily balance snapshots for reconciliation
+settlement_batches    -- Batch settlement tracking
+reconciliation_log    -- Reconciliation audit log
+scheduled_jobs        -- Cron job tracking
+```
+
+### Account Types
+
+| Account Type | Owner Type | Purpose |
+|--------------|------------|---------|
+| MERCHANT_PAYIN | MERCHANT | Incoming payments |
+| MERCHANT_PAYOUT | MERCHANT | Available for withdrawal |
+| MERCHANT_HOLD | MERCHANT | Frozen/disputed funds |
+| LEGAL_ENTITY_MAIN | LEGAL_ENTITY | Settlement account |
+| PROVIDER_PAYIN | PROVIDER_LEGAL_ENTITY | Gateway collections |
+| PROVIDER_PAYOUT | PROVIDER_LEGAL_ENTITY | Gateway liquidity |
+| PROVIDER_EXPENSE | PROVIDER_LEGAL_ENTITY | Fee tracking |
+| SUPER_ADMIN_INCOME | SUPER_ADMIN | Platform revenue |
+| WORLD_MAIN | WORLD | External source/sink |
+
+### Balance Model
+
+Each account tracks **four balance dimensions**:
+
+```typescript
+{
+  debits_pending: bigint,   // Reserved outgoing
+  debits_posted: bigint,    // Confirmed outgoing
+  credits_pending: bigint,  // Reserved incoming
+  credits_posted: bigint,   // Confirmed incoming
+}
+
+// Net balance = credits_posted - debits_posted
+// Available = net_balance - debits_pending
 ```
 
 ## Architecture Patterns
@@ -88,6 +161,36 @@ const result = await merchantService.createMerchant(data);
 return c.json({ success: true, data: result });
 ```
 
+### PostgreSQL Ledger Services
+
+Use the new PostgreSQL ledger services for all financial operations:
+
+```typescript
+import {
+  PgLedgerService,
+  PgAccountManagerService,
+  PgSettlementService,
+  rupeeToPaisa,
+  paisaToRupee,
+} from "@/services/ledger-pg";
+
+// Create accounts
+await PgLedgerService.createMerchantAccounts(merchantId, merchantName);
+
+// Create transfer
+await PgLedgerService.createTransfer({
+  debitAccountId: fromAccount,
+  creditAccountId: toAccount,
+  amount: rupeeToPaisa(100.50),  // Always use paisa
+  operationCode: OPERATION_CODES.PAYIN,
+  description: "Customer payment",
+});
+
+// Get balance
+const balance = await PgLedgerService.getBalance(accountId);
+console.log(paisaToRupee(balance.netBalance));  // Convert back to rupees
+```
+
 ### DTO Validation with Zod
 All API inputs are validated using Zod schemas in `src/dto/`:
 ```typescript
@@ -96,23 +199,13 @@ import { z } from "zod";
 export const CreateMerchantDto = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  // ...
 });
 ```
 
 ### Repository Pattern
 Data access is abstracted through repositories in `src/repositories/`:
 ```typescript
-// Use repositories for database operations
 const merchant = await merchantRepository.findById(id);
-```
-
-### Provider Factory Pattern
-Payment gateways use a factory pattern in `src/providers/`:
-```typescript
-// base-provider.ts defines interface
-// alphapay.provider.ts implements it
-// provider-factory.ts creates instances
 ```
 
 ## Code Conventions
@@ -132,11 +225,18 @@ import { MerchantModel } from "@/models/merchant.model";
 - Routes: `*.routes.ts`
 - Middleware: `*.middleware.ts`
 
-### Custom ID Generation
-Use `generateCustomId()` for entity IDs:
+### Currency Handling
+
+**CRITICAL**: All monetary amounts in the ledger are stored in **paisa** (1/100 INR):
+
 ```typescript
-// Generates sequential IDs like MID-001, ADM-001, TXN-001
-const merchantId = await generateCustomId("MID", MerchantModel);
+import { rupeeToPaisa, paisaToRupee } from "@/services/ledger-pg";
+
+// Always convert when interfacing with ledger
+const amountPaisa = rupeeToPaisa(100.50);  // 10050n
+
+// Convert back for display/API responses
+const amountRupee = paisaToRupee(10050n);  // 100.50
 ```
 
 ### Error Handling
@@ -156,76 +256,72 @@ All API responses follow this structure:
 { success: false, error: "...", message: "..." }
 ```
 
-## Database Models
+## Worker Instance & Cron Jobs
 
-### Core Entities
-| Model | Purpose | Prefix |
-|-------|---------|--------|
-| AdminModel | System administrators | ADM |
-| MerchantModel | Payment merchants | MID |
-| TransactionModel | Payment transactions | TXN |
-| ProviderModel | Payment gateways | PRV |
-| LegalEntityModel | Banking entities | LE |
-| ProviderLegalEntityModel | Provider-entity links | PLE |
-| MerchantBankAccountModel | Merchant bank accounts | MBA |
-| LedgerAccountModel | TigerBeetle accounts | - |
-| AuditLogModel | Admin action audit | - |
-| LoginHistoryModel | Login tracking | - |
+The worker instance (`src/instances/worker.ts`) handles background processing:
 
-### Transaction States
-```typescript
-enum TransactionStatus {
-  PENDING = "PENDING",
-  PROCESSING = "PROCESSING",
-  SUCCESS = "SUCCESS",
-  FAILED = "FAILED",
-  EXPIRED = "EXPIRED"
-}
+### Registered Jobs
+
+| Job Name | Schedule | Purpose |
+|----------|----------|---------|
+| merchant-settlement | Every hour | Move payin → payout |
+| provider-settlement | Every 6 hours | Settle provider fees |
+| expired-transfer-cleanup | Every 15 min | Void expired pending transfers |
+| reconciliation | Daily 2 AM | Verify ledger integrity |
+| constraint-validation | Every 4 hours | Check balance constraints |
+| balance-snapshot | Daily midnight | Create balance snapshots |
+
+### Manual Job Triggers
+
+```bash
+# Trigger a job manually
+curl -X POST http://localhost:4001/jobs/merchant-settlement/trigger
+
+# Enable/disable a job
+curl -X POST http://localhost:4001/jobs/reconciliation/toggle \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": false}'
+
+# List all jobs
+curl http://localhost:4001/jobs
 ```
-
-## Middleware Stack
-
-Applied in order in `src/app.ts`:
-1. `secureHeaders` - Security headers
-2. `cors` - CORS configuration
-3. `contextMiddleware` - Request context
-4. `safeBody` - Body parsing
-5. `traceContext` - Distributed tracing (X-Request-ID)
-6. `loggerContext` - Logger initialization
-7. `errorHandler` - Global error handling
-8. `requestLogger` - HTTP request logging
-
-Route-specific middleware:
-- `authMiddleware` - JWT validation
-- `panelIpWhitelistMiddleware` - IP restrictions
-- `rateLimiter` - Rate limiting
 
 ## Environment Variables
 
 Key variables (see `.env.example`):
 
 ```bash
-# Database
-MONGODB_URI=...
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017
 MONGO_DB_NAME=smartFintech
 
+# PostgreSQL Ledger
+POSTGRES_LEDGER_URL=postgresql://localhost:5432/fintech_ledger
+POSTGRES_POOL_SIZE=20
+
 # Services
-PORT=3000                    # Payment service
-API_PORT=4000                # API service (implicit)
+PAYMENT_PORT=3000
+API_PORT=4000
+WORKER_PORT=4001
 
 # Auth
 JWT_SECRET=...
 
 # Cache
-REDIS_URL=...
+REDIS_URL=redis://localhost:6379
 
-# Ledger
+# Worker/Cron
+CRON_SETTLEMENT_ENABLED=true
+CRON_RECONCILIATION_ENABLED=true
+CRON_SNAPSHOT_ENABLED=true
+
+# Legacy (TigerBeetle - being phased out)
 TIGERBEETLE_CLUSTER_ID=0
-TIGERBEETLE_REPLICA_ADDRESSES=...
+TIGERBEETLE_REPLICA_ADDRESSES=
 
 # Email
 SMTP_HOST=...
-SMTP_PORT=...
+SMTP_PORT=587
 SMTP_USER=...
 SMTP_PASS=...
 
@@ -269,9 +365,10 @@ LOG_LEVEL=info
 1. **Never hardcode secrets** - Use environment variables
 2. **Validate all inputs** - Use Zod DTOs
 3. **Check IP whitelisting** - Admin routes enforce IP restrictions
-4. **Use parameterized queries** - Mongoose handles this, but be careful with raw queries
+4. **Use parameterized queries** - Both Mongoose and postgres handle this
 5. **Hash passwords** - Use Argon2 via existing utilities
 6. **Log sensitive operations** - Use AuditService for admin actions
+7. **Use transactions** - PostgreSQL ledger operations are atomic
 
 ### Authentication Flow
 1. User submits credentials
@@ -279,13 +376,6 @@ LOG_LEVEL=info
 3. User verifies OTP
 4. Server returns JWT token
 5. Subsequent requests include `Authorization: Bearer <token>`
-
-## Testing
-
-Currently no automated test suite. When adding tests:
-- Place in `__tests__/` directories or `*.test.ts` files
-- Use Bun's built-in test runner or Vitest
-- Mock external services (payment providers, email)
 
 ## Common Tasks
 
@@ -302,11 +392,16 @@ Currently no automated test suite. When adding tests:
 3. Register in provider factory
 4. Add credentials to config
 
-### Adding a New Model
-1. Create schema in `src/models/`
-2. Add counter prefix to `generateCustomId()` if needed
-3. Create repository if complex queries needed
-4. Add DTOs for API operations
+### Adding a New Ledger Operation
+1. Add operation code in `src/services/ledger-pg/pg-ledger.service.ts`
+2. Add to `operation_codes` table migration
+3. Implement in `PgSettlementService` if needed
+4. Create appropriate API endpoints
+
+### Adding a New Cron Job
+1. Create job function in `src/services/worker/jobs/`
+2. Register in `src/instances/worker.ts` with cron expression
+3. Add environment variable for enable/disable if needed
 
 ## Build & Deployment
 
@@ -314,9 +409,21 @@ Currently no automated test suite. When adding tests:
 ```bash
 bun build src/instances/api.ts --target=bun --outdir=dist --outfile=api.js
 bun build src/instances/payment.ts --target=bun --outdir=dist --outfile=payment.js
+bun build src/instances/worker.ts --target=bun --outdir=dist --outfile=worker.js
 ```
 
-External packages (native bindings): `tigerbeetle-node`, `argon2`
+External packages (native bindings): `tigerbeetle-node`, `argon2`, `postgres`
+
+### Database Setup
+
+**PostgreSQL** (required for ledger):
+```bash
+# Create database
+createdb fintech_ledger
+
+# Run migrations
+npm run db:migrate
+```
 
 ### Deployment Options
 1. **Systemd** - Use `deploy.sh` for Linux servers
@@ -326,10 +433,11 @@ External packages (native bindings): `tigerbeetle-node`, `argon2`
 ## Troubleshooting
 
 ### Common Issues
-- **Port conflicts**: API uses 4000, Payment uses 3000
-- **TigerBeetle connection**: Ensure cluster ID and addresses are correct
+- **Port conflicts**: API=4000, Payment=3000, Worker=4001
+- **PostgreSQL connection**: Ensure `POSTGRES_LEDGER_URL` is correct
 - **MongoDB connection**: Check URI and network access
 - **Redis connection**: Verify REDIS_URL format (rediss:// for TLS)
+- **Migration failures**: Check PostgreSQL logs and user permissions
 
 ### Logs
 - Development: Console output with pino-pretty
@@ -338,9 +446,25 @@ External packages (native bindings): `tigerbeetle-node`, `argon2`
 
 ## Important Notes for AI Assistants
 
-1. **Multi-instance awareness**: Changes may need to apply to both API and Payment instances
-2. **Financial accuracy**: Double-entry accounting must balance; test ledger operations carefully
-3. **Security-first**: This handles real money - validate inputs, check permissions, audit actions
-4. **Existing patterns**: Follow established patterns in the codebase for consistency
-5. **No tests currently**: Be extra careful with changes; consider adding tests for critical paths
-6. **Type safety**: TypeScript strict mode is enabled; resolve all type errors
+1. **Dual database architecture**: MongoDB for business data, PostgreSQL for ledger
+2. **Always use paisa**: Convert to/from rupees at API boundaries
+3. **Financial accuracy**: Double-entry must balance; use transactions
+4. **Idempotency**: Use idempotency keys for ledger operations
+5. **Security-first**: This handles real money - validate everything
+6. **Existing patterns**: Follow established patterns for consistency
+7. **Worker awareness**: Background jobs handle settlements automatically
+8. **Type safety**: TypeScript strict mode is enabled; resolve all type errors
+9. **Migration period**: TigerBeetle code exists but PostgreSQL is primary
+
+## Migration from TigerBeetle
+
+The codebase is transitioning from TigerBeetle to PostgreSQL:
+
+| Old (TigerBeetle) | New (PostgreSQL) |
+|-------------------|------------------|
+| `LedgerService` | `PgLedgerService` |
+| `AccountManagerService` | `PgAccountManagerService` |
+| `SettlementService` | `PgSettlementService` |
+| `LedgerAccountModel` (Mongo) | `ledger_accounts` (Postgres) |
+
+Use the new `@/services/ledger-pg` services for all new development.
