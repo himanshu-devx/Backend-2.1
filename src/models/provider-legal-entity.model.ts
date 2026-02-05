@@ -23,6 +23,13 @@ export interface ProviderLegalEntityDocument extends Document {
   payin: SharedServiceConfig;
   payout: SharedServiceConfig;
 
+  // Ledger account IDs
+  accounts?: {
+    payinAccountId?: string;
+    payoutAccountId?: string;
+    expenseAccountId?: string;
+  };
+
   isActive: boolean;
   isOnboard: boolean;
   createdAt: Date;
@@ -52,6 +59,17 @@ const ProviderLegalEntitySchema = new Schema<ProviderLegalEntityDocument>(
 
     payin: SharedServiceConfigSchema,
     payout: SharedServiceConfigSchema,
+
+    // Ledger account IDs
+    accounts: {
+      type: {
+        payinAccountId: { type: String },
+        payoutAccountId: { type: String },
+        expenseAccountId: { type: String },
+      },
+      default: {},
+    },
+
     isActive: { type: Boolean, default: true },
     isOnboard: { type: Boolean, default: false },
   },

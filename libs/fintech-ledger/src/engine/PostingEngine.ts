@@ -538,6 +538,45 @@ export class PostingEngine {
     );
   }
 
+  async updateAccount(
+    id: string,
+    updates: {
+      status?: string;
+      allowOverdraft?: boolean;
+      minBalance?: bigint;
+      type?: string;
+    }
+  ): Promise<void> {
+    // Dynamically build update query
+    const fields: string[] = [];
+    const values: any[] = [id];
+    let idx = 2;
+
+    if (updates.status !== undefined) {
+      fields.push(`status = $${idx++}`);
+      values.push(updates.status);
+    }
+    if (updates.allowOverdraft !== undefined) {
+      fields.push(`allow_overdraft = $${idx++}`);
+      values.push(updates.allowOverdraft);
+    }
+    if (updates.minBalance !== undefined) {
+      fields.push(`min_balance = $${idx++}`);
+      values.push(updates.minBalance);
+    }
+    if (updates.type !== undefined) {
+      fields.push(`type = $${idx++}`);
+      values.push(updates.type);
+    }
+
+    if (fields.length === 0) return;
+
+    await this.pool.query(
+      `UPDATE accounts SET ${fields.join(', ')} WHERE id = $1`,
+      values
+    );
+  }
+
   // --- Reporting Helpers needed for report_excel.ts ---
 
   async getAllAccounts(): Promise<Account[]> {
@@ -572,6 +611,40 @@ export class PostingEngine {
       createdAt: r.created_at,
       minBalance: BigInt(r.min_balance)
     };
+  }
+
+  async getAccounts(ids: string[]): Promise<Account[]> {
+    if (ids.length === 0) return [];
+    const res = await this.pool.query('SELECT * FROM accounts WHERE id = ANY($1::text[])', [ids]);
+    return res.rows.map(r => ({
+      id: r.id,
+      code: r.code,
+      type: r.type,
+      ledgerBalance: BigInt(r.ledger_balance),
+      pendingBalance: BigInt(r.pending_balance),
+      allowOverdraft: r.allow_overdraft,
+      status: r.status,
+      isHeader: r.is_header,
+      createdAt: r.created_at,
+      minBalance: BigInt(r.min_balance)
+    }));
+  }
+
+  async searchAccounts(pattern: string): Promise<Account[]> {
+    // pattern should be a SQL LIKE pattern (e.g. 'LIABILITY:MERCHANT:%:PAYIN')
+    const res = await this.pool.query('SELECT * FROM accounts WHERE id LIKE $1', [pattern]);
+    return res.rows.map(r => ({
+      id: r.id,
+      code: r.code,
+      type: r.type,
+      ledgerBalance: BigInt(r.ledger_balance),
+      pendingBalance: BigInt(r.pending_balance),
+      allowOverdraft: r.allow_overdraft,
+      status: r.status,
+      isHeader: r.is_header,
+      createdAt: r.created_at,
+      minBalance: BigInt(r.min_balance)
+    }));
   }
 
   async getAccountTypes(accountIds: string[]): Promise<Map<string, AccountType>> {

@@ -97,6 +97,17 @@ export type EmailTemplateContextMap = {
   ADMIN_WELCOME: AdminWelcomeContext;
   PASSWORD_RESET: PasswordResetContext;
   OTP_VERIFICATION: OtpVerificationContext;
+  REPORT_READY: {
+    reportId: string;
+    reportType: string;
+    ownerName: string;
+    summary?: {
+      openingBalance: string;
+      closingBalance: string;
+      debitTotal: string;
+      creditTotal: string;
+    }
+  };
 };
 
 export type EmailTemplateId = keyof EmailTemplateContextMap;
@@ -264,6 +275,61 @@ export const emailTemplates: EmailTemplateFnMap = {
       text: `Hello ${ctx.name}. Your verification code is: ${ctx.otp}. This code expires in 10 minutes. If you didn't reqest this, secure your account immediately.`,
     };
   },
+
+  // 5. 📊 REPORT READY Template (Premium Design)
+  REPORT_READY: (ctx) => {
+    const summaryHtml = ctx.summary ? `
+      <div style="background-color: #f8f9fa; border: 1px solid ${COLORS.border}; border-radius: 8px; padding: 25px; margin: 25px 0;">
+        <h3 style="margin-top: 0; color: ${COLORS.textDark}; font-size: 18px; text-transform: uppercase; border-bottom: 2px solid ${COLORS.primary}; padding-bottom: 10px;">PERIOD SUMMARY</h3>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+          <tr>
+            <td style="padding: 10px 0; color: #666;"><i>Opening Balance:</i></td>
+            <td style="padding: 10px 0; text-align: right; font-weight: 700;">${ctx.summary.openingBalance}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; color: #666;"><i>Total Debits:</i></td>
+            <td style="padding: 10px 0; text-align: right; font-weight: 700; color: #dc3545;">- ${ctx.summary.debitTotal}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; color: #666;"><i>Total Credits:</i></td>
+            <td style="padding: 10px 0; text-align: right; font-weight: 700; color: ${COLORS.success};">+ ${ctx.summary.creditTotal}</td>
+          </tr>
+          <tr style="border-top: 2px solid ${COLORS.border};">
+            <td style="padding: 15px 0 0 0; font-size: 16px; font-weight: bold; text-transform: uppercase;"><b>CLOSING BALANCE:</b></td>
+            <td style="padding: 15px 0 0 0; text-align: right; font-size: 16px; font-weight: 800; color: ${COLORS.primary};">${ctx.summary.closingBalance}</td>
+          </tr>
+        </table>
+      </div>
+    ` : '';
+
+    const bodyContent = `
+      <h1 style="color: ${COLORS.primary}; font-size: 26px; border-bottom: 1px solid ${COLORS.border}; padding-bottom: 15px;">REPORT NOTIFICATION</h1>
+      <p>Hello <strong>${ctx.ownerName}</strong>,</p>
+      <p>Your <b>${ctx.reportType}</b> report has been successfully generated and is now available for download.</p>
+      
+      ${summaryHtml}
+
+      <div style="background-color: #e7f3ff; border-left: 5px solid ${COLORS.primary}; padding: 20px; border-radius: 4px; margin: 30px 0;">
+        <p style="margin: 0; font-size: 14px; color: ${COLORS.primary};">
+          <b>REPORT ID:</b> ${ctx.reportId}<br/>
+          <i>Status: COMPLETED</i><br/>
+          <i>Policy: Available for download for 7 days.</i>
+        </p>
+      </div>
+
+      <p style="text-align: center; margin: 40px 0;">
+        <a href="${ENV.FRONTEND_URL || '#'}/reports" style="${baseStyles.button(COLORS.success)}">DOWNLOAD REPORT</a>
+      </p>
+
+      <p style="font-size: 13px; color: #888; border-top: 1px solid ${COLORS.border}; padding-top: 15px;"><b>Security Note:</b> This report contains sensitive financial statistics. Handle according to organization policy.</p>
+    `;
+
+    return {
+      subject: `[FINTECH] ${ctx.reportType} Report - ${ctx.reportId}`,
+      html: baseEmailLayout(bodyContent),
+      text: `Hello ${ctx.ownerName}. Your ${ctx.reportType} report (${ctx.reportId}) is ready for download.`,
+    };
+  },
 };
 
 export const EmailTemplate = {
@@ -271,4 +337,5 @@ export const EmailTemplate = {
   ADMIN_WELCOME: "ADMIN_WELCOME" as EmailTemplateId,
   PASSWORD_RESET: "PASSWORD_RESET" as EmailTemplateId,
   OTP_VERIFICATION: "OTP_VERIFICATION" as EmailTemplateId,
+  REPORT_READY: "REPORT_READY" as EmailTemplateId,
 } as const;

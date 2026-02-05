@@ -1,7 +1,6 @@
 import { BaseProvider } from './base-provider';
 import { getProviderConfig } from '@/config/provider-credentials.config';
-import { AlphaPayProvider } from './alphapay.provider';
-// import { RazorpayProvider } from './razorpay.provider'; // Commented out until file exists or verified
+import { DummyProvider } from './dummy.provider';
 
 /**
  * Provider Factory
@@ -18,11 +17,9 @@ export class ProviderFactory {
         const config = getProviderConfig(pleId);
 
         switch (config.providerId.toLowerCase()) {
-            case 'alphapay':
-                return this.getAlphaPayProvider(config);
-
-            case 'razorpay':
-                return this.getRazorpayProvider(config);
+            case 'dummy':
+            case 'alphapay': // Map existing AlphaPay configs to Dummy for seamless transition
+                return this.getDummyProvider(config);
 
             default:
                 throw new Error(`Unsupported provider: ${config.providerId}`);
@@ -30,18 +27,10 @@ export class ProviderFactory {
     }
 
     /**
-     * Get AlphaPay provider instance
+     * Get Dummy provider instance
      */
-    private static getAlphaPayProvider(config: any): BaseProvider {
-        return new AlphaPayProvider(config);
-    }
-
-    /**
-     * Get Razorpay provider instance
-     */
-    private static getRazorpayProvider(config: any): BaseProvider {
-        // const { RazorpayProvider } = require('./razorpay.provider');
-        // return new RazorpayProvider(config);
-        throw new Error("Razorpay not fully implemented yet");
+    private static getDummyProvider(config: any): BaseProvider {
+        return new DummyProvider(config);
     }
 }
+

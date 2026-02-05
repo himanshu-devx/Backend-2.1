@@ -71,7 +71,7 @@ export class CacheService {
     );
     if (!merchant) return null;
 
-    const mData = merchant.toJSON();
+    const mData = merchant.toObject();
     await this.setMerchant(id, mData);
 
     return mData;
@@ -144,6 +144,22 @@ export class CacheService {
       providerId,
       legalEntityId,
     });
+    if (!channel) return null;
+
+    const cData = channel.toJSON();
+    await redis.setex(key, this.TTL, JSON.stringify(cData));
+    return cData;
+  }
+
+  /**
+   * Get Channel (PLE) from cache or DB by internal channel ID
+   */
+  static async getChannelById(id: string): Promise<any> {
+    const key = `chan:${id}`;
+    const cached = await redis.get(key);
+    if (cached) return JSON.parse(cached);
+
+    const channel = await ProviderLegalEntityModel.findOne({ id });
     if (!channel) return null;
 
     const cData = channel.toJSON();

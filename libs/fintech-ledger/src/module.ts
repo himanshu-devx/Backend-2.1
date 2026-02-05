@@ -15,6 +15,7 @@ import {
   IntegrityChecksJobOptions,
   EodRebuildJobOptions,
 } from './scheduler/jobs';
+import { autoMigrate } from './db/migration';
 import { AuditService, AuditLogMode } from './services/AuditService';
 
 export interface LedgerModuleConfig {
@@ -48,7 +49,7 @@ export interface LedgerModule {
  * Initialize the ledger module once and reuse across your app.
  * This will create a shared PG pool and a Ledger instance bound to it.
  */
-export function initLedgerModule(config: LedgerModuleConfig = {}): LedgerModule {
+export async function initLedgerModule(config: LedgerModuleConfig = {}): Promise<LedgerModule> {
   if (config.db) {
     initConnection(config.db);
   }
@@ -63,7 +64,12 @@ export function initLedgerModule(config: LedgerModuleConfig = {}): LedgerModule 
     });
   }
 
+
   const ledger = new Ledger(dbProperties.pool, config.ledger);
+
+  // Auto-migrate schema and seed accounts
+  await autoMigrate();
+
   return {
     ledger,
     jobs: {

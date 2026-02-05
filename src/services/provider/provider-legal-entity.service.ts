@@ -113,6 +113,22 @@ export class ProviderLegalEntityService {
     const result = await providerLegalEntityRepository.findAll(query);
 
     if (result.data.length > 0) {
+      const { AccountService } = await import("@/services/ledger/account.service");
+
+      // Collect all account IDs
+      const allAccountIds: string[] = [];
+      result.data.forEach((doc: any) => {
+        const ple = doc.toJSON ? doc.toJSON() : doc;
+        if (ple.accounts) {
+          if (ple.accounts.payinAccountId) allAccountIds.push(ple.accounts.payinAccountId);
+          if (ple.accounts.payoutAccountId) allAccountIds.push(ple.accounts.payoutAccountId);
+          if (ple.accounts.expenseAccountId) allAccountIds.push(ple.accounts.expenseAccountId);
+        }
+      });
+
+      // Fetch all balances
+      const balances = await AccountService.getAccountBalances(allAccountIds);
+
       const simplifiedData = result.data.map((doc: any) => {
         const ple = doc.toJSON ? doc.toJSON() : doc;
 
@@ -130,9 +146,18 @@ export class ProviderLegalEntityService {
           provider: ple.provider,
           legalEntity: ple.legalEntity,
           isOnboard: ple.isOnboard,
-          payinAccount: null,
-          payoutAccount: null,
-          expenseAccount: null,
+          payinAccount: ple.accounts?.payinAccountId ? {
+            accountId: ple.accounts.payinAccountId,
+            ledgerBalance: balances[ple.accounts.payinAccountId] || '0',
+          } : null,
+          payoutAccount: ple.accounts?.payoutAccountId ? {
+            accountId: ple.accounts.payoutAccountId,
+            ledgerBalance: balances[ple.accounts.payoutAccountId] || '0',
+          } : null,
+          expenseAccount: ple.accounts?.expenseAccountId ? {
+            accountId: ple.accounts.expenseAccountId,
+            ledgerBalance: balances[ple.accounts.expenseAccountId] || '0',
+          } : null,
         };
       });
 
@@ -277,6 +302,36 @@ export class ProviderLegalEntityService {
       data.name = `ple- (${pName} - ${lName})`;
     }
 
+    // Create Provider Ledger Accounts FIRST - if this fails, don't create the link
+    let createdAccounts: any = null;
+    try {
+      const { AccountService } = await import("@/services/ledger/account.service");
+      createdAccounts = await AccountService.createProviderAccounts(
+        data.providerId!,
+        data.name,
+        auditContext?.actorEmail || "SYSTEM"
+      );
+
+      // Verify all accounts were created
+      if (!createdAccounts || !createdAccounts.payin || !createdAccounts.payout || !createdAccounts.expense) {
+        throw new Error("Failed to create all required provider ledger accounts");
+      }
+    } catch (error: any) {
+      console.error("[ERROR] Failed to create provider ledger accounts:", error);
+      return err(
+        BadRequest(
+          `Failed to create provider ledger accounts: ${error.message || "Unknown error"}`
+        )
+      );
+    }
+
+    // Store ledger account IDs in provider-legal entity model
+    (data as any).accounts = {
+      payinAccountId: createdAccounts.payin.id,
+      payoutAccountId: createdAccounts.payout.id,
+      expenseAccountId: createdAccounts.expense.id,
+    };
+
     const created = await providerLegalEntityRepository.create(data);
 
     if (auditContext) {
@@ -286,7 +341,10 @@ export class ProviderLegalEntityService {
         actorId: auditContext.actorEmail,
         entityType: "PROVIDER_LEGAL_ENTITY",
         entityId: created._id as unknown as string,
-        metadata: { initialData: data },
+        metadata: {
+          initialData: data,
+          accountsCreated: createdAccounts ? Object.keys(createdAccounts).length : 0
+        },
         ipAddress: auditContext.ipAddress,
         userAgent: auditContext.userAgent,
         requestId: auditContext.requestId,

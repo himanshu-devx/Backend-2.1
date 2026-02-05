@@ -1,17 +1,35 @@
 import { Hono } from "hono";
-import { PaymentController } from "@/controllers/payment/payment.controller";
-
+import { extractPaymentIp } from "@/middlewares/ip-extractor.middleware";
+import { paymentSecurityMiddleware } from "@/middlewares/payment-security.middleware";
 import { validateBody } from "@/middlewares/validate";
 import { InitiatePayinSchema } from "@/dto/payment/payin.dto";
+import { PaymentController } from "@/controllers/payment/payment.controller";
 import { InitiatePayoutSchema } from "@/dto/payment/payout.dto";
-
-import { extractPaymentIp } from "@/middlewares/ip-extractor.middleware";
 
 const paymentRoutes = new Hono();
 const controller = new PaymentController();
 
-paymentRoutes.post("/payin", extractPaymentIp, validateBody(InitiatePayinSchema), (c) => controller.payin(c));
-paymentRoutes.post("/payout", extractPaymentIp, validateBody(InitiatePayoutSchema), (c) => controller.payout(c));
-paymentRoutes.get("/status/:orderId", (c) => controller.checkStatus(c));
+paymentRoutes.post(
+    "/payin/initiate",
+    extractPaymentIp,
+    paymentSecurityMiddleware("PAYIN"),
+    validateBody(InitiatePayinSchema),
+    (c) => controller.payin(c)
+);
+
+paymentRoutes.post(
+    "/payout/initiate",
+    extractPaymentIp,
+    paymentSecurityMiddleware("PAYOUT"),
+    validateBody(InitiatePayoutSchema),
+    (c) => controller.payout(c)
+);
+
+paymentRoutes.get(
+    "/:orderId",
+    extractPaymentIp,
+    paymentSecurityMiddleware("STATUS"),
+    (c) => controller.checkStatus(c)
+);
 
 export default paymentRoutes;

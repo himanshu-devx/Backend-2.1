@@ -2,6 +2,10 @@ import {
   TransactionModel,
 } from "@/models/transaction.model";
 import { getISTDate } from "@/utils/date.util";
+import { LedgerService } from "@/services/ledger/ledger.service";
+import { LedgerUtils } from "@/utils/ledger.utils";
+import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
+import { AccountType } from "fintech-ledger";
 
 
 export interface AnalyticsStats {
@@ -13,7 +17,7 @@ export interface AnalyticsStats {
   successRate: number;
   totalAmount: number;
   successAmount: number;
-  balance?: number; // Ledger Balance (Real-time)
+  balance?: string; // Changed to string for precise currency formatting (e.g. "123.45")
 }
 
 export interface DashboardAnalytics {
@@ -410,11 +414,48 @@ export class AnalyticsService {
       failureRate: 0
     };
 
-    const payinStats = data.payinOverview?.[0] || defaultStats;
-    const payoutStats = data.payoutOverview?.[0] || defaultStats;
+    const payinStats = data.payinOverview?.[0] ? { ...data.payinOverview[0] } : { ...defaultStats };
+    const payoutStats = data.payoutOverview?.[0] ? { ...data.payoutOverview[0] } : { ...defaultStats };
 
-    payinStats.balance = "0";
-    payoutStats.balance = "0";
+    // --- Real-time Balance Integration ---
+    const merchantIds = filters.merchantIds || (filters.merchantId ? (Array.isArray(filters.merchantId) ? filters.merchantId : [filters.merchantId]) : []);
+
+    if (merchantIds.length > 0) {
+      let totalPayinBalance = 0;
+      let totalPayoutBalance = 0;
+
+      for (const mid of merchantIds) {
+        const payinId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, mid, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYIN);
+        const payoutId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, mid, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYOUT);
+
+        const [payinBal, payoutBal] = await Promise.all([
+          LedgerService.getBalance(payinId).catch(() => "0.00"),
+          LedgerService.getBalance(payoutId).catch(() => "0.00")
+        ]);
+
+
+
+        // Payin Balance (Money In)
+        totalPayinBalance += parseFloat(payinBal);
+
+        // Payout Balance (Money available for Payout)
+        totalPayoutBalance += parseFloat(payoutBal);
+      }
+
+      // Convert to Absolute for Liability Accounts (Negative in raw mode means we owe them = their balance)
+      // Actually per Ledger.ts logic for LIABILITY:
+      // normalizedAmount = -rawAmount.
+      // So if raw balance is -100 (Credit), normalized is +100.
+      // LedgerService.getBalance already calls normalizeDisplayBalance.
+      // Since displayMode is 'raw', it returns raw amount.
+      // Merchant LIABILITY account: 100 Credit = -100 in raw.
+      // We want to show it as 100 (available funds).
+      payinStats.balance = Math.abs(totalPayinBalance).toFixed(2);
+      payoutStats.balance = Math.abs(totalPayoutBalance).toFixed(2);
+    } else {
+      payinStats.balance = "0.00";
+      payoutStats.balance = "0.00";
+    }
 
     return {
       payin: payinStats,

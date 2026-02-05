@@ -2,7 +2,7 @@
 
 // Accounting Domain (The Primary Interface)
 export { Ledger } from './core/Ledger';
-export { LedgerTransferRequest } from './api/types';
+export type { LedgerTransferRequest } from './api/types';
 export { initLedgerModule } from './module';
 export type { LedgerModule, LedgerModuleConfig } from './module';
 export type { LedgerOptions, LedgerDisplayMode } from './core/Ledger';
@@ -11,7 +11,8 @@ export type { LedgerOptions, LedgerDisplayMode } from './core/Ledger';
 export { PostingEngine } from './engine/PostingEngine';
 
 // Types & Enums
-export { AccountType, AccountStatus, LedgerEntry, LedgerCommand, Money } from './api/types';
+export { AccountType, AccountStatus } from './api/types';
+export type { LedgerEntry, LedgerCommand, Money, CreateAccountInput } from './api/types';
 
 // Errors
 export {
@@ -36,8 +37,9 @@ export {
     close as closeConnection,
     dbProperties,
     isInitialized,
-    LedgerPoolConfig,
+    type LedgerPoolConfig,
 } from './infra/postgres';
+
 
 // Reporting
 export { AccountStatement } from './reporting/AccountStatement';

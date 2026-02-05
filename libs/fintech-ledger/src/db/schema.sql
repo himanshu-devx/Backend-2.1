@@ -96,7 +96,7 @@ CREATE TABLE journal_lines (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   
   PRIMARY KEY (id, created_at)               
-);
+) PARTITION BY RANGE (created_at);
 
 -- Indexes
 CREATE INDEX idx_lines_acc_created ON journal_lines(account_id, created_at);

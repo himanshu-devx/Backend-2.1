@@ -87,3 +87,15 @@ export interface LedgerTransferRequest {
   credits?: Array<{ accountId: AccountId; amount: Money }>;
   status?: 'POSTED' | 'PENDING';
 }
+
+export interface CreateAccountInput {
+  id: string;
+  code: string;
+  type: AccountType;
+  allowOverdraft?: boolean;
+  parentId?: string;
+  isHeader?: boolean;
+  status?: AccountStatus;
+  minBalance?: string | number;
+  actorId?: string;
+}

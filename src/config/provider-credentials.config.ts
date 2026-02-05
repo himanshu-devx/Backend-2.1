@@ -1,5 +1,8 @@
+import { ENV } from "./env";
+
 export interface ProviderConfig {
     providerId: string;
+    legalEntityId?: string;
     baseUrl?: string;
     credentials: {
         apiKey?: string;
@@ -21,15 +24,15 @@ export interface ProviderConfig {
  * 3. The providerId should match the provider slug in your Provider model
  */
 export const PROVIDER_CREDENTIALS: Record<string, ProviderConfig> = {
-    // AlphaPay - Wisipay Legal Entity
-    // Provider: alphapay, Legal Entity: wisipay
-    // Update this PLE ID to match your actual database record
+    // Dummy Provider - Default Legal Entity
+    // Provider: dummy, Legal Entity: default
     "PLE-1": {
-        providerId: "alphapay",
-        baseUrl: "https://dashboard.alphapayfintechsolutions.net",
+        providerId: "dummy",
+        legalEntityId: "default",
         credentials: {
-            apiKey: "VaXEMBDR9xmFIoahL3VNv747dTaU7P7T",
-            apiSalt: "Jdl1Xvx5NROAWCI3",
+            // Dummy provider doesn't need real credentials
+            apiKey: "DUMMY_KEY",
+            apiSalt: "DUMMY_SALT",
         }
     },
 };
@@ -44,11 +47,6 @@ export function getProviderConfig(pleId: string): ProviderConfig {
     const config = PROVIDER_CREDENTIALS[pleId];
     if (!config) {
         throw new Error(`No credentials configured for PLE ID: ${pleId}. Please add configuration in provider-credentials.config.ts`);
-    }
-
-    // Validate that required credentials are present
-    if (!config.credentials.apiKey && !config.credentials.merchantId) {
-        throw new Error(`Missing API credentials for PLE ID: ${pleId}. Check environment variables.`);
     }
 
     return config;

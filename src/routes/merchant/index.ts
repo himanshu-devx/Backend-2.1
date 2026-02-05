@@ -10,6 +10,8 @@ import { MERCHANT_ROLES } from "@/constants/users.constant";
 import { panelIpWhitelistMiddleware } from "@/middlewares/panel-ip-whitelist.middleware";
 import merchantBankAccountRoutes from "./bank-account.routes";
 import merchantTransactionRoutes from "./transaction.routes";
+import merchantLedgerRoutes from "./ledger.routes";
+import merchantReportRoutes from "./report.routes";
 
 const merchantRoutes = new Hono();
 
@@ -19,6 +21,8 @@ merchantRoutes.use(panelIpWhitelistMiddleware);
 
 merchantRoutes.route("/bank-accounts", merchantBankAccountRoutes);
 merchantRoutes.route("/transactions", merchantTransactionRoutes);
+merchantRoutes.route("/ledger", merchantLedgerRoutes);
+merchantRoutes.route("/reports", merchantReportRoutes);
 
 merchantRoutes.get(
   "/login-history",

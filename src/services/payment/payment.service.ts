@@ -5,31 +5,29 @@ import { InitiatePayoutDto } from "@/dto/payment/payout.dto";
 
 export class PaymentService {
   async createPayin(
-    merchantId: string,
+    merchant: any,
     data: InitiatePayinDto,
     requestIp: string
   ): Promise<TransactionDocument> {
-    const { payinService } = await import("@/services/payment/payin.service");
-    // Cast to any or verify PayinService accepts compatible types.
-    // Ideally PayinService should accept InitiatePayinDto.
-    return payinService.createPayin(merchantId, data as any, requestIp);
+    const { PayinWorkflow } = await import("@/workflows/payin.workflow");
+    const workflow = new PayinWorkflow(merchant, requestIp);
+    return workflow.execute(data);
   }
 
   async createPayout(
-    merchantId: string,
+    merchant: any,
     data: InitiatePayoutDto,
     requestIp: string
   ): Promise<TransactionDocument> {
-    const { payoutService } = await import("@/services/payment/payout.service");
-    return payoutService.createPayout(merchantId, data as any, requestIp);
+    const { PayoutWorkflow } = await import("@/workflows/payout.workflow");
+    const workflow = new PayoutWorkflow(merchant, requestIp);
+    return workflow.execute(data);
   }
 
   async getStatus(merchantId: string, orderId: string) {
-    const txn = await TransactionModel.findOne({ orderId, merchantId });
-    if (!txn) {
-      throw NotFound("Transaction not found");
-    }
-    return txn;
+    const { StatusSyncWorkflow } = await import("@/workflows/status-sync.workflow");
+    const workflow = new StatusSyncWorkflow();
+    return workflow.execute(merchantId, orderId);
   }
 }
 

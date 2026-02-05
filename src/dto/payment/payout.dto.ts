@@ -1,22 +1,49 @@
 import { z } from "zod";
 
 export const InitiatePayoutSchema = z.object({
-    amount: z.number().min(1, "Amount must be at least 1"),
-    currency: z.string().default("INR"),
-    orderId: z.string().min(1, "Order ID is required"),
-    paymentMode: z.enum(["UPI", "NEFT", "RTGS", "IMPS"]),
-    beneficiary: z.object({
-        name: z.string().min(1, "Beneficiary name is required"),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
+    amount: z
+        .number()
+        .int()
+        .min(1, "Amount must be at least 1"),
 
-        // Banking details required for Payout
-        accountNumber: z.string().min(1, "Account Number is required"),
-        ifsc: z.string().min(1, "IFSC Code is required"),
-        bankName: z.string().min(1, "Bank Name is required"),
-    }),
-    remarks: z.string().optional(), // For mock/testing: SUCCESS, PENDING, or FAILED
-    hash: z.string().min(1, "Hash is required"),
+    orderId: z
+        .string()
+        .trim()
+        .min(10, "Order ID must be at least 10 characters long")
+        .max(25, "Order ID must be at most 25 characters long"),
+
+    paymentMode: z.enum(["UPI", "NEFT", "RTGS", "IMPS"]),
+
+    beneficiaryName: z
+        .string()
+        .trim()
+        .min(3, "Beneficiary name must be at least 3 characters long"),
+
+    beneficiaryAccountNumber: z
+        .string()
+        .trim()
+        .min(1, "Account Number is required"),
+
+    beneficiaryIfsc: z
+        .string()
+        .transform(v => v.toUpperCase().trim())
+        .pipe(
+            z
+                .string()
+                .length(11, "IFSC must be exactly 11 characters")
+                .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC format")
+        ),
+
+    beneficiaryBankName: z
+        .string()
+        .trim()
+        .min(3, "Bank Name must be at least 3 characters long"),
+
+    remarks: z
+        .string()
+        .trim()
+        .max(100, "Remarks too long")
+        .optional(),
 });
 
 export type InitiatePayoutDto = z.infer<typeof InitiatePayoutSchema>;

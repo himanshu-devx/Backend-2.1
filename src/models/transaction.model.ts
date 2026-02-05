@@ -33,6 +33,10 @@ export interface TransactionParty {
   name?: string;
   email?: string;
   phone?: string;
+  accountNumber?: string;
+  bankName?: string;
+  ifscCode?: string;
+  upiId?: string;
   [key: string]: any;
 }
 
@@ -58,7 +62,7 @@ export interface TransactionDocument extends Document {
   currency: string;
 
   orderId: string; // System generated unique order ID
-  providerRef: string; // Renamed from externalOrderId
+  providerRef?: string; // Renamed from externalOrderId
   // referenceId removed
   utr?: string;
   paymentMode?: string;
@@ -72,7 +76,6 @@ export interface TransactionDocument extends Document {
   error?: string;
 
   meta: {
-    hash?: string;
     ip?: string;
     [key: string]: any;
   };
@@ -171,6 +174,10 @@ const TransactionSchema = new Schema<TransactionDocument>(
           name: String,
           email: String,
           phone: String,
+          accountNumber: String,
+          bankName: String,
+          ifscCode: String,
+          upiId: String,
         },
         { _id: false }
       ),
@@ -204,7 +211,6 @@ const TransactionSchema = new Schema<TransactionDocument>(
     meta: {
       type: new Schema(
         {
-          hash: { type: String },
           ip: { type: String },
         },
         { strict: false, _id: false }
@@ -247,7 +253,7 @@ TransactionSchema.virtual("narration").get(function (
 
 // Indexes
 TransactionSchema.index(
-  { destinationEntityId: 1, providerRef: 1 },
+  { providerId: 1, providerRef: 1 },
   { unique: true, partialFilterExpression: { providerRef: { $exists: true } } }
 );
 TransactionSchema.index({ createdAt: -1 });

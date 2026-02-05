@@ -16,6 +16,12 @@ export interface LegalEntityDocument extends Document {
   };
   isActive: boolean;
   isOnboard: boolean;
+
+  // Ledger account ID
+  accounts?: {
+    bankAccountId?: string;
+  };
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +41,14 @@ const LegalEntitySchema = new Schema<LegalEntityDocument>(
     },
     isActive: { type: Boolean, default: true },
     isOnboard: { type: Boolean, default: false },
+
+    // Ledger account ID
+    accounts: {
+      type: {
+        bankAccountId: { type: String },
+      },
+      default: {},
+    },
   },
   {
     timestamps: { currentTime: getISTDate },

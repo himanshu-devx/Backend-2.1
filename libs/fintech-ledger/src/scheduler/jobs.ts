@@ -4,6 +4,7 @@ import { LedgerWriter } from '../engine/LedgerWriter';
 import { computeEntryHash } from '../verification/HashUtils';
 import { runAtomic } from '../infra/atomic';
 import { AuditService } from '../services/AuditService';
+import { logger as pinoLogger } from '../infra/logger';
 
 export interface JobLogger {
   log?: (...args: any[]) => void;
@@ -30,14 +31,19 @@ export interface VerifyIntegrityJobOptions extends JobOptions {
   stopOnPending?: boolean;
 }
 
-export interface IntegrityChecksJobOptions extends JobOptions {}
+export interface IntegrityChecksJobOptions extends JobOptions { }
 
 export interface EodRebuildJobOptions extends JobOptions {
   eodAt?: Date;
   snapshotAll?: boolean;
 }
 
-const defaultLogger: JobLogger = console;
+const defaultLogger: JobLogger = {
+  log: (msg) => pinoLogger.info(msg),
+  info: (msg) => pinoLogger.info(msg),
+  warn: (msg) => pinoLogger.warn(msg),
+  error: (msg) => pinoLogger.error(msg),
+};
 
 async function withConnection<T>(options: JobOptions | undefined, task: () => Promise<T>): Promise<T> {
   const logger = options?.logger || defaultLogger;
@@ -62,26 +68,26 @@ async function withConnection<T>(options: JobOptions | undefined, task: () => Pr
  * Run via cron (nightly or hourly).
  */
 export async function runSnapshotJob(options: SnapshotJobOptions = {}): Promise<{ processed: number }> {
-  const logger = options.logger || defaultLogger;
+  const logger = options.logger || pinoLogger;
   return withConnection(options, async () => {
-    logger.log?.('📸 Starting Auto-Snapshot Job...');
+    logger.info?.('📸 Starting Auto-Snapshot Job...');
     const engine = new PostingEngine(dbProperties.pool, new LedgerWriter());
 
     const res = await query(`SELECT id FROM accounts WHERE status = 'ACTIVE'`);
     const accounts = res.rows;
 
-    logger.log?.(`Checking ${accounts.length} accounts...`);
+    logger.info?.(`Checking ${accounts.length} accounts...`);
     let count = 0;
 
     for (const acc of accounts) {
       await engine.captureSnapshot(acc.id);
       count++;
       if (options.batchSize && count % options.batchSize === 0) {
-        logger.log?.(`Processed ${count}...`);
+        logger.info?.(`Processed ${count}...`);
       }
     }
 
-    logger.log?.(`✅ Snapshot complete for ${count} accounts.`);
+    logger.info?.(`✅ Snapshot complete for ${count} accounts.`);
     await AuditService.log('SNAPSHOT_JOB', 'ALL', 'system', { processed: count });
     return { processed: count };
   });
@@ -91,10 +97,10 @@ export async function runSnapshotJob(options: SnapshotJobOptions = {}): Promise<
  * Async Sealer (Notary). Connects the hash chain for high-throughput writes.
  */
 export async function runSealLedgerJob(options: SealLedgerJobOptions = {}): Promise<void> {
-  const logger = options.logger || defaultLogger;
+  const logger = options.logger || pinoLogger;
   const batchSize = options.batchSize || 100;
   return withConnection(options, async () => {
-    logger.log?.('⛓️  Starting Ledger Sealer...');
+    logger.info?.('⛓️  Starting Ledger Sealer...');
 
     const tipRes = await query(`
         SELECT hash, sequence 
@@ -107,7 +113,7 @@ export async function runSealLedgerJob(options: SealLedgerJobOptions = {}): Prom
     let previousHash = tipRes.rows[0]?.hash || null;
     let lastSequence = tipRes.rows[0]?.sequence || 0;
 
-    logger.log?.(
+    logger.info?.(
       `Tip: Seq ${lastSequence} | Hash ${previousHash ? previousHash.substring(0, 8) : 'GENESIS'}`,
     );
 
@@ -124,11 +130,11 @@ export async function runSealLedgerJob(options: SealLedgerJobOptions = {}): Prom
       );
 
       if (batchRes.rowCount === 0) {
-        logger.log?.('✅ Ledger Up to Date.');
+        logger.info?.('✅ Ledger Up to Date.');
         break;
       }
 
-      logger.log?.(`Processing batch of ${batchRes.rowCount}...`);
+      logger.info?.(`Processing batch of ${batchRes.rowCount}...`);
 
       for (const entry of batchRes.rows) {
         const linesRes = await query(`SELECT account_id, amount FROM journal_lines WHERE entry_id = $1`, [
@@ -164,10 +170,10 @@ export async function runVerifyIntegrityJob(options: VerifyIntegrityJobOptions =
   errors: number;
   ok: boolean;
 }> {
-  const logger = options.logger || defaultLogger;
+  const logger = options.logger || pinoLogger;
   const stopOnPending = options.stopOnPending ?? true;
   return withConnection(options, async () => {
-    logger.log?.('🕵️  Starting Integrity Verification...');
+    logger.info?.('🕵️  Starting Integrity Verification...');
 
     const res = await query(`
         SELECT 
@@ -181,7 +187,7 @@ export async function runVerifyIntegrityJob(options: VerifyIntegrityJobOptions =
         ORDER BY e.sequence ASC
       `);
 
-    logger.log?.(`Checking ${res.rows.length} entries...`);
+    logger.info?.(`Checking ${res.rows.length} entries...`);
 
     let previousHash: string | null = null;
     let errors = 0;
@@ -189,7 +195,7 @@ export async function runVerifyIntegrityJob(options: VerifyIntegrityJobOptions =
 
     for (const entry of res.rows) {
       if (entry.hash === null) {
-        logger.log?.(`⚠️  Seq ${entry.sequence}: PENDING SEAL`);
+        logger.info?.(`⚠️  Seq ${entry.sequence}: PENDING SEAL`);
         if (stopOnPending) break;
       }
 
@@ -223,7 +229,7 @@ export async function runVerifyIntegrityJob(options: VerifyIntegrityJobOptions =
     }
 
     if (errors === 0) {
-      logger.log?.('✅ Integrity Verified. Ledger is Immutable.');
+      logger.info?.('✅ Integrity Verified. Ledger is Immutable.');
     } else {
       logger.error?.(`❌ Verification FAILED with ${errors} errors.`);
     }
@@ -239,9 +245,9 @@ export async function runVerifyIntegrityJob(options: VerifyIntegrityJobOptions =
 export async function runIntegrityChecksJob(
   options: IntegrityChecksJobOptions = {},
 ): Promise<{ ok: boolean; checks: Array<{ name: string; count: number }> }> {
-  const logger = options.logger || defaultLogger;
+  const logger = options.logger || pinoLogger;
   return withConnection(options, async () => {
-    logger.log?.('🔎 Running Integrity Checks...');
+    logger.info?.('🔎 Running Integrity Checks...');
 
     const checks: Array<{ name: string; count: number }> = [];
 
@@ -297,7 +303,7 @@ export async function runIntegrityChecksJob(
     checks.push({ name: 'entries_without_lines', count: q4.rowCount || 0 });
 
     const ok = checks.every((c) => c.count === 0);
-    logger.log?.(ok ? '✅ Integrity Checks Passed.' : '❌ Integrity Checks Failed.');
+    logger.info?.(ok ? '✅ Integrity Checks Passed.' : '❌ Integrity Checks Failed.');
     await AuditService.log('INTEGRITY_CHECKS_JOB', 'ALL', 'system', { ok, checks });
     return { ok, checks };
   });
@@ -307,19 +313,19 @@ export async function runIntegrityChecksJob(
  * Database maintenance tuning for high-throughput usage.
  */
 export async function runOptimizeDbJob(options: JobOptions = {}): Promise<void> {
-  const logger = options.logger || defaultLogger;
+  const logger = options.logger || pinoLogger;
   return withConnection(options, async () => {
-    logger.log?.('🔧 Optimization 1: Tuning Accounts Table (HOT Updates)...');
+    logger.info?.('🔧 Optimization 1: Tuning Accounts Table (HOT Updates)...');
     await query(`ALTER TABLE accounts SET (fillfactor = 70);`);
     await query(`VACUUM FULL accounts;`);
 
-    logger.log?.('🔧 Optimization 2: Tuning Journal Entries (Append Performance)...');
+    logger.info?.('🔧 Optimization 2: Tuning Journal Entries (Append Performance)...');
     await query(`ALTER TABLE journal_lines SET (autovacuum_enabled = on);`);
 
-    logger.log?.('🔍 Optimization 3: Analyzing Statistics...');
+    logger.info?.('🔍 Optimization 3: Analyzing Statistics...');
     await query(`ANALYZE;`);
 
-    logger.log?.('✅ Optimization Complete. DB is tuned for High Throughput.');
+    logger.info?.('✅ Optimization Complete. DB is tuned for High Throughput.');
     await AuditService.log('OPTIMIZE_DB_JOB', 'ALL', 'system', {});
   });
 }
@@ -328,15 +334,15 @@ export async function runOptimizeDbJob(options: JobOptions = {}): Promise<void> 
  * DANGER: Clears all ledger data. Use only in dev/test.
  */
 export async function runResetDbJob(options: JobOptions = {}): Promise<void> {
-  const logger = options.logger || defaultLogger;
+  const logger = options.logger || pinoLogger;
   return withConnection(options, async () => {
-    logger.log?.('🗑️  Clearing Database...');
+    logger.info?.('🗑️  Clearing Database...');
     await query('TRUNCATE TABLE journal_lines CASCADE');
     await query('TRUNCATE TABLE journal_entries CASCADE');
     await query('TRUNCATE TABLE balance_snapshots CASCADE');
     await query('TRUNCATE TABLE audit_logs CASCADE');
     await query('DELETE FROM accounts CASCADE');
-    logger.log?.('✅ Database Cleared.');
+    logger.info?.('✅ Database Cleared.');
     await AuditService.log('RESET_DB_JOB', 'ALL', 'system', {});
   });
 }
@@ -348,14 +354,14 @@ export async function runResetDbJob(options: JobOptions = {}): Promise<void> {
 export async function runEodRebuildJob(
   options: EodRebuildJobOptions = {},
 ): Promise<{ updated: number; snapshots: number; eodAt: Date }> {
-  const logger = options.logger || defaultLogger;
+  const logger = options.logger || pinoLogger;
   const now = new Date();
   const eodAt = options.eodAt
     ? new Date(options.eodAt)
     : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
   return withConnection(options, async () => {
-    logger.log?.('🧮 Starting EOD Ledger Rebuild...');
+    logger.info?.('🧮 Starting EOD Ledger Rebuild...');
 
     return runAtomic(async (client) => {
       const updatedRes = await client.query(`
@@ -420,7 +426,7 @@ export async function runEodRebuildJob(
         snapshots = snapRes.rowCount || 0;
       }
 
-      logger.log?.(`✅ EOD Rebuild complete. Updated: ${updated}, Snapshots: ${snapshots}`);
+      logger.info?.(`✅ EOD Rebuild complete. Updated: ${updated}, Snapshots: ${snapshots}`);
       await AuditService.log('EOD_REBUILD_JOB', 'ALL', 'system', { updated, snapshots, eodAt });
       return { updated, snapshots, eodAt };
     });

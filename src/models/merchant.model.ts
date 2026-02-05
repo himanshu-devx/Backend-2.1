@@ -33,6 +33,13 @@ export interface MerchantDocument extends Document {
   payin: SharedServiceConfig;
   payout: SharedServiceConfig;
 
+  // Ledger account IDs
+  accounts?: {
+    payinAccountId?: string;
+    payoutAccountId?: string;
+    holdAccountId?: string;
+  };
+
   comparePassword(candidate: string): Promise<boolean>;
   disableMerchant(reason?: string): Promise<void>;
   enableMerchant(): Promise<void>;
@@ -89,6 +96,16 @@ const MerchantSchema = new Schema<MerchantDocument>(
       type: SharedServiceConfigSchema,
       required: true,
       default: () => ({}),
+    },
+
+    // Ledger account IDs
+    accounts: {
+      type: {
+        payinAccountId: { type: String },
+        payoutAccountId: { type: String },
+        holdAccountId: { type: String },
+      },
+      default: {},
     },
   },
   {

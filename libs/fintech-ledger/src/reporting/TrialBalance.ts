@@ -29,7 +29,7 @@ export class TrialBalance {
       JOIN accounts a ON l.account_id = a.id
       JOIN journal_entries e ON l.entry_id = e.id
       WHERE e.posted_at IS NOT NULL
-      GROUP BY l.account_id, a.code
+      GROUP BY l.account_id, a.code, a.type
       ORDER BY a.code ASC
     `;
 

@@ -10,6 +10,7 @@ import {
   Account,
   AccountType,
   AccountStatus,
+  CreateAccountInput,
 } from '../api/types';
 import { InvalidCommandError } from '../api/errors';
 import { dbProperties } from '../infra/postgres';
@@ -58,41 +59,60 @@ export class Ledger {
 
   // --- Account Management ---
 
-  async createAccount(
-    id: string,
-    code: string,
-    type: AccountType,
-    allowOverdraft = false,
-    parentId?: string,
-    isHeader = false,
-    status: AccountStatus = AccountStatus.ACTIVE,
-    minBalance: string | number = '0',
-    actorId = 'system',
-  ): Promise<void> {
+  async createAccount(input: CreateAccountInput): Promise<void> {
     await this.engine.createAccount(
-      id,
-      code,
-      type,
-      allowOverdraft,
-      parentId,
-      isHeader,
-      status,
-      Money.toPaisa(minBalance)
+      input.id,
+      input.code,
+      input.type,
+      input.allowOverdraft ?? false,
+      input.parentId,
+      input.isHeader ?? false,
+      input.status ?? AccountStatus.ACTIVE,
+      Money.toPaisa(input.minBalance ?? '0')
     );
-    await AuditService.log('CREATE_ACCOUNT', id, actorId, {
-      code,
-      type,
-      allowOverdraft,
-      parentId,
-      isHeader,
-      status,
-      minBalance: minBalance.toString(),
+    await AuditService.log('CREATE_ACCOUNT', input.id, input.actorId ?? 'system', {
+      code: input.code,
+      type: input.type,
+      allowOverdraft: input.allowOverdraft,
+      parentId: input.parentId,
+      isHeader: input.isHeader,
+      status: input.status,
+      minBalance: input.minBalance?.toString(),
     });
+  }
+
+  async updateAccount(
+    id: string,
+    updates: {
+      status?: AccountStatus;
+      allowOverdraft?: boolean;
+      minBalance?: string | number;
+      type?: AccountType;
+    },
+    actorId = 'system'
+  ): Promise<void> {
+    await this.engine.updateAccount(id, {
+      status: updates.status,
+      allowOverdraft: updates.allowOverdraft,
+      minBalance: updates.minBalance !== undefined ? Money.toPaisa(updates.minBalance) : undefined,
+      type: updates.type
+    });
+    await AuditService.log('UPDATE_ACCOUNT', id, actorId, updates);
   }
 
   async getAccount(id: string): Promise<AccountView> {
     const acc: Account = await this.engine.getAccount(id);
     return this.mapAccount(acc);
+  }
+
+  async getAccounts(ids: string[]): Promise<AccountView[]> {
+    const accounts = await this.engine.getAccounts(ids);
+    return accounts.map((acc) => this.mapAccount(acc));
+  }
+
+  async searchAccounts(pattern: string): Promise<AccountView[]> {
+    const accounts = await this.engine.searchAccounts(pattern);
+    return accounts.map((acc) => this.mapAccount(acc));
   }
 
   async getAllAccounts(): Promise<AccountView[]> {

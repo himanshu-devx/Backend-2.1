@@ -47,6 +47,20 @@ const schema = z.object({
   ),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW: z.coerce.number().default(60),
+
+  // Ledger Cron Jobs
+  CRON_LEDGER_SEALER: z.string().default("*/5 * * * * *"),
+  CRON_LEDGER_SNAPSHOT: z.string().default("0 0 * * * *"),
+  CRON_LEDGER_INTEGRITY: z.string().default("0 0 */6 * * *"),
+  CRON_LEDGER_OPTIMIZE: z.string().default("0 0 0 * * *"),
+  CRON_LEDGER_EOD: z.string().default("0 30 23 * * *"),
+  REPORT_EMAIL_TRANSACTIONS_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(false)),
+  REPORT_EMAIL_STATEMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(true)),
+
+  // AlphaPay Credentials (PLE-1)
+  ALPHAPAY_PLE1_API_KEY: z.string().optional(),
+  ALPHAPAY_PLE1_API_SALT: z.string().optional(),
+  ALPHAPAY_PLE1_BASE_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -87,4 +101,18 @@ export const ENV: Env = schema.parse({
   RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
   PAYMENT_PORT: process.env.PAYMENT_PORT || 3001,
   APP_BRAND_PREFIX: process.env.APP_BRAND_PREFIX,
+
+  // Ledger Cron Jobs
+  CRON_LEDGER_SEALER: process.env.CRON_LEDGER_SEALER,
+  CRON_LEDGER_SNAPSHOT: process.env.CRON_LEDGER_SNAPSHOT,
+  CRON_LEDGER_INTEGRITY: process.env.CRON_LEDGER_INTEGRITY,
+  CRON_LEDGER_OPTIMIZE: process.env.CRON_LEDGER_OPTIMIZE,
+  CRON_LEDGER_EOD: process.env.CRON_LEDGER_EOD,
+  REPORT_EMAIL_TRANSACTIONS_ENABLED: process.env.REPORT_EMAIL_TRANSACTIONS_ENABLED,
+  REPORT_EMAIL_STATEMENT_ENABLED: process.env.REPORT_EMAIL_STATEMENT_ENABLED,
+
+  // AlphaPay
+  ALPHAPAY_PLE1_API_KEY: process.env.ALPHAPAY_PLE1_API_KEY,
+  ALPHAPAY_PLE1_API_SALT: process.env.ALPHAPAY_PLE1_API_SALT,
+  ALPHAPAY_PLE1_BASE_URL: process.env.ALPHAPAY_PLE1_BASE_URL,
 });

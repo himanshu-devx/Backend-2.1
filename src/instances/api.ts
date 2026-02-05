@@ -10,8 +10,17 @@ import paymentRoutes from "@/routes/payment/payment.routes";
 import webhookRoutes from "@/routes/payment/webhook.routes";
 import { rateLimiter } from "@/middlewares/rate-limiter";
 import "@/infra/otel-sdk";
+import { serve } from "@hono/node-server";
+import { startLedgerJobs } from "@/jobs/ledger.jobs";
 
 await bootstrap();
+
+try {
+  // startLedgerJobs();
+} catch (error) {
+  console.error("Failed to start ledger cron jobs (continuing application)", error);
+}
+
 const app = buildApp();
 
 app.use("*", rateLimiter(ENV.RATE_LIMIT_MAX, ENV.RATE_LIMIT_WINDOW));
@@ -21,7 +30,6 @@ app.route("/api/merchant", merchantRoutes);
 app.route("/api/payment", paymentRoutes);
 app.route("/webhook", webhookRoutes);
 
-import { serve } from "@hono/node-server";
 
 // ... previous imports are fine, but ensure layout matches
 // I will just replace the end of the file or the whol file if simpler.

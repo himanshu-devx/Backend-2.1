@@ -54,23 +54,23 @@ export class MerchantService {
     merchant.password = "-";
 
     let loginUrl = `${ENV.APP_BASE_URL}/merchant/login`;
-    
+
     // Dynamic URL generation based on request origin
     if (auditContext?.origin) {
-         const baseUrl = auditContext.origin.replace(/\/$/, "");
-         loginUrl = `${baseUrl}/merchant/login`;
+      const baseUrl = auditContext.origin.replace(/\/$/, "");
+      loginUrl = `${baseUrl}/merchant/login`;
     }
 
     await emailService.sendTemplate(
-        EmailTemplate.MERCHANT_WELCOME,
-        merchant.email,
-        {
-          name: merchant.name,
-          loginUrl: loginUrl,
-          initialPassword: temporaryPassword,
-          loginId: merchant.email,
-          role: merchant.role,
-        }
+      EmailTemplate.MERCHANT_WELCOME,
+      merchant.email,
+      {
+        name: merchant.name,
+        loginUrl: loginUrl,
+        initialPassword: temporaryPassword,
+        loginId: merchant.email,
+        role: merchant.role,
+      }
     );
 
     if (auditContext) {

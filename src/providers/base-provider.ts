@@ -84,6 +84,11 @@ export abstract class BaseProvider {
     abstract handleWebhook(payload: any, type: 'PAYIN' | 'PAYOUT'): Promise<ProviderResponse>;
 
     /**
+     * Proactive Status Sync
+     */
+    abstract checkStatus(req: { transactionId: string, providerTransactionId?: string, type: 'PAYIN' | 'PAYOUT' }): Promise<Partial<ProviderResponse>>;
+
+    /**
      * Normalize provider status to our standard statuses
      * @param status - Provider-specific status
      * @returns Normalized status

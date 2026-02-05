@@ -1,18 +1,45 @@
 import { z } from "zod";
 
 export const InitiatePayinSchema = z.object({
-    amount: z.number().min(1, "Amount must be at least 1"),
-    currency: z.string().default("INR"),
-    orderId: z.string().min(1, "Order ID is required"),
-    customer: z.object({
-        name: z.string().optional(),
-        email: z.string().email().optional(),
-        phone: z.string().optional(),
-    }),
+    amount: z
+        .number()
+        .int()
+        .min(1, "Amount must be at least 1"),
+
+    orderId: z
+        .string()
+        .trim()
+        .min(10, "Order ID must be at least 10 characters long")
+        .max(25, "Order ID must be at most 25 characters long"),
+
     paymentMode: z.enum(["UPI", "QR"]),
-    remarks: z.string().optional(), // For mock/testing: SUCCESS, PENDING, or FAILED
-    hash: z.string().min(1, "Hash is required"),
-    redirectUrl: z.string().url().optional(),
+
+    customerName: z
+        .string()
+        .trim()
+        .min(3, "Customer name must be at least 3 characters long"),
+
+    customerEmail: z
+        .string()
+        .trim()
+        .email("Invalid email address"),
+
+    customerPhone: z
+        .string()
+        .trim()
+        .regex(/^[6-9]\d{9}$/, "Invalid Indian mobile number"),
+
+    remarks: z
+        .string()
+        .trim()
+        .max(200, "Remarks too long")
+        .optional(),
+
+    redirectUrl: z
+        .string()
+        .trim()
+        .url("Invalid redirect URL")
+        .optional(),
 });
 
 export type InitiatePayinDto = z.infer<typeof InitiatePayinSchema>;

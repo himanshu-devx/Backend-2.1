@@ -52,11 +52,50 @@ export class MerchantManagementService {
         status: json.status, // Account Status
         isOnboard: json.isOnboard,
         createdAt: json.createdAt,
+        _accounts: json.accounts, // Keep for internal use
         // payment configs (payin/payout) excluded from list view
       };
     });
 
-    // Ledger account enrichment removed (ledger-only mode)
+    // Enrich with ledger account balances
+    try {
+      const { AccountService } = await import("@/services/ledger/account.service");
+
+      // Collect all account IDs
+      const allAccountIds: string[] = [];
+      sanitizedData.forEach((merchant: any) => {
+        if (merchant._accounts) {
+          if (merchant._accounts.payinAccountId) allAccountIds.push(merchant._accounts.payinAccountId);
+          if (merchant._accounts.payoutAccountId) allAccountIds.push(merchant._accounts.payoutAccountId);
+          if (merchant._accounts.holdAccountId) allAccountIds.push(merchant._accounts.holdAccountId);
+        }
+      });
+
+      // Fetch all balances in one call
+      const balances = await AccountService.getAccountBalances(allAccountIds);
+
+      // Attach balances to each merchant in the new format
+      sanitizedData.forEach((merchant: any) => {
+        if (merchant._accounts) {
+          merchant.payinAccount = {
+            accountId: merchant._accounts.payinAccountId || null,
+            ledgerBalance: balances[merchant._accounts.payinAccountId] || '0',
+          };
+          merchant.payoutAccount = {
+            accountId: merchant._accounts.payoutAccountId || null,
+            ledgerBalance: balances[merchant._accounts.payoutAccountId] || '0',
+          };
+          merchant.holdAccount = {
+            accountId: merchant._accounts.holdAccountId || null,
+            ledgerBalance: balances[merchant._accounts.holdAccountId] || '0',
+          };
+        }
+        // Remove internal field
+        delete merchant._accounts;
+      });
+    } catch (error) {
+      console.error("Failed to enrich merchants with balances:", error);
+    }
 
     return ok({ data: sanitizedData, meta: listResult.meta });
   }

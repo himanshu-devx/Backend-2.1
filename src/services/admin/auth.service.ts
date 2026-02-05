@@ -59,6 +59,30 @@ export class AdminService {
       const admin = await adminRepository.create(data as any);
       admin.password = "-";
 
+      // Create World and Income System Accounts (one-time setup)
+      let systemAccounts: any = null;
+      try {
+        const { AccountService } = await import("@/services/ledger/account.service");
+        systemAccounts = await AccountService.createWorldAccounts(
+          admin.email // Use super admin email as actor
+        );
+
+        // Verify both accounts were created
+        if (!systemAccounts || !systemAccounts.world || !systemAccounts.income) {
+          throw new Error("Failed to create system accounts (World/Income)");
+        }
+
+        console.log("[SUCCESS] Created system accounts:", {
+          worldAccountId: systemAccounts.world.id,
+          incomeAccountId: systemAccounts.income.id
+        });
+      } catch (error: any) {
+        console.error("[ERROR] Failed to create system accounts during super admin setup:", error);
+        // Note: We don't fail the super admin creation if system accounts fail
+        // This allows manual retry of system account creation
+        console.warn("[WARNING] Super admin created but system accounts failed. Please create them manually.");
+      }
+
       await emailService.sendTemplate(
         EmailTemplate.ADMIN_WELCOME,
         admin.email,
@@ -102,7 +126,10 @@ export class AdminService {
           ipAddress: auditContext.ipAddress,
           userAgent: auditContext.userAgent,
           requestId: auditContext.requestId,
-          metadata: { newAdminEmail: admin.email },
+          metadata: {
+            newAdminEmail: admin.email,
+            systemAccountsCreated: systemAccounts ? true : false
+          },
         });
       }
 
@@ -822,11 +849,31 @@ export class AdminService {
       );
     }
 
-    let resultMetadata: any = null;
+    let createdAccounts: any = null;
 
+    // Step 1: Create Ledger Accounts FIRST - if this fails, don't onboard
     try {
+      const { AccountService } = await import("@/services/ledger/account.service");
+      createdAccounts = await AccountService.createMerchantAccounts(
+        merchant.id,
+        merchant.name,
+        auditContext?.actorEmail || "SYSTEM"
+      );
 
-      // 2. Update Merchant Flags
+      // Verify all accounts were created
+      if (!createdAccounts || !createdAccounts.payin || !createdAccounts.payout || !createdAccounts.hold) {
+        throw new Error("Failed to create all required ledger accounts");
+      }
+    } catch (error: any) {
+      // If account creation fails, do NOT proceed with onboarding
+      console.error("[ERROR] Failed to create ledger accounts during onboarding:", error);
+      return err(BadRequest(
+        `Failed to create ledger accounts: ${error.message || "Unknown error"}`
+      ));
+    }
+
+    // Step 2: Update Merchant Flags ONLY after accounts are successfully created
+    try {
       const updates: any = {};
       const payin = merchant.payin || {};
       payin.isActive = true;
@@ -838,6 +885,13 @@ export class AdminService {
       updates.payout = payout;
       updates.isOnboard = true;
 
+      // Store ledger account IDs in merchant model
+      updates.accounts = {
+        payinAccountId: createdAccounts.payin.id,
+        payoutAccountId: createdAccounts.payout.id,
+        holdAccountId: createdAccounts.hold.id,
+      };
+
       await merchantRepository.update(
         merchant.id,
         updates
@@ -846,7 +900,10 @@ export class AdminService {
       const { CacheService } = await import("@/services/common/cache.service");
       await CacheService.invalidateMerchant(merchantId);
     } catch (error: any) {
-      return err(BadRequest(error.message || "Failed to onboard merchant"));
+      console.error("[ERROR] Failed to update merchant status after account creation:", error);
+      return err(BadRequest(
+        `Ledger accounts created but failed to update merchant status: ${error.message || "Unknown error"}`
+      ));
     }
 
     if (auditContext) {
@@ -859,12 +916,15 @@ export class AdminService {
         ipAddress: auditContext.ipAddress,
         userAgent: auditContext.userAgent,
         requestId: auditContext.requestId,
+        metadata: {
+          accountsCreated: createdAccounts ? Object.keys(createdAccounts).length : 0
+        },
       });
     }
 
     return ok({
       message: "Merchant onboarded successfully",
-      accounts: resultMetadata.accounts,
+      accounts: createdAccounts,
     });
   }
   static async updateMerchantRouting(

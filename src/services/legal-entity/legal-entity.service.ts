@@ -51,19 +51,35 @@ export class LegalEntityService {
       }
 
       // --- AUTOMATED PROVISIONING ---
+      let createdAccount: any = null;
       try {
+        const { AccountService } = await import("@/services/ledger/account.service");
+        createdAccount = await AccountService.createLegalEntityAccount(
+          data.id!,
+          data.name!,
+          auditContext?.actorEmail || "SYSTEM"
+        );
 
+        // Verify account was created
+        if (!createdAccount || !createdAccount.id) {
+          throw new Error("Failed to create ledger account for legal entity");
+        }
       } catch (error: any) {
+        console.error("[ERROR] Failed to provision ledger account for legal entity:", error);
         return err(
           BadRequest(
-            `Failed to provision ledger account: ${error.message || "Unknown error"
-            }`
+            `Failed to provision ledger account: ${error.message || "Unknown error"}`
           )
         );
       }
 
       // Assign provisioned data
       data.isOnboard = true;
+
+      // Store ledger account ID in legal entity model
+      (data as any).accounts = {
+        bankAccountId: createdAccount.id,
+      };
 
       const created = await legalEntityRepository.create(data);
 
@@ -74,7 +90,10 @@ export class LegalEntityService {
           actorId: auditContext.actorEmail,
           entityType: "LEGAL_ENTITY",
           entityId: created._id as unknown as string,
-          metadata: { initialData: data },
+          metadata: {
+            initialData: data,
+            ledgerAccountId: createdAccount?.id
+          },
           ipAddress: auditContext.ipAddress,
           userAgent: auditContext.userAgent,
           requestId: auditContext.requestId,
@@ -106,15 +125,23 @@ export class LegalEntityService {
 
     if (result.data.length > 0) {
       try {
-        const ids = result.data.map(le => le.id);
+        const { AccountService } = await import("@/services/ledger/account.service");
 
-        // We need to attach this to the results.
-        // result.data are Mongoose documents. To attach arbitrary fields, we might need to rely on .toJSON() or lean() if repo returned lean.
-        // BaseRepository often returns documents.
-        // Let's try to set it dynamically. If strict TS checks fail on Document type, we might need `any`.
+        // Collect all account IDs
+        const allAccountIds: string[] = [];
+        result.data.forEach((doc: any) => {
+          const json = doc.toObject ? doc.toObject() : doc;
+          if (json.accounts?.bankAccountId) {
+            allAccountIds.push(json.accounts.bankAccountId);
+          }
+        });
+
+        // Fetch all balances
+        const balances = await AccountService.getAccountBalances(allAccountIds);
+
+        // Map to simplified objects with balances
         result.data = result.data.map((doc) => {
-          const json = doc.toObject ? doc.toObject() : doc; // Ensure POJO
-          // Return simplified object with mainAccount
+          const json = doc.toObject ? doc.toObject() : doc;
           return {
             id: json.id,
             name: json.name,
@@ -123,7 +150,10 @@ export class LegalEntityService {
             entityType: json.entityType,
             status: json.status,
             createdAt: json.createdAt,
-            mainAccount: (json as any).mainAccount // Include the enriched mainAccount
+            bankAccount: json.accounts?.bankAccountId ? {
+              accountId: json.accounts.bankAccountId,
+              ledgerBalance: balances[json.accounts.bankAccountId] || '0'
+            } : null
           };
         }) as any;
       } catch (err) {

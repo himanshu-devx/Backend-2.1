@@ -9,6 +9,7 @@ import { MerchantModel } from "@/models/merchant.model";
 import { ProviderModel } from "@/models/provider.model";
 import { LegalEntityModel } from "@/models/legal-entity.model";
 import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
+import { getShiftedISTDate } from "@/utils/date.util";
 
 export interface TransactionListFilter extends ListQueryDTO {
   merchantId?: string; // Kept for alias
@@ -22,6 +23,7 @@ export interface TransactionListFilter extends ListQueryDTO {
   startDate?: string;
   endDate?: string;
   category?: "PAYIN" | "PAYOUT" | "OTHER";
+  fields?: string; // Comma-separated fields for projection
 }
 
 export class TransactionService {
@@ -134,12 +136,11 @@ export class TransactionService {
     if (sort) {
       const field = sort.startsWith("-") ? sort.substring(1) : sort;
       const order = sort.startsWith("-") ? -1 : 1;
-      // Allow sorting by safe fields only if needed, but for now allow all top-level
       sortOptions = { [field]: order };
     }
 
-    // Minimal Projection Fields
-    const projection = {
+    // Dynamic Projection Optimization
+    let currentProjection: any = {
       id: 1,
       type: 1,
       status: 1,
@@ -152,17 +153,22 @@ export class TransactionService {
       party: 1,
       narration: 1,
       createdAt: 1,
-      sourceEntityId: 1,
-      sourceEntityType: 1,
-      destinationEntityId: 1,
-      destinationEntityType: 1,
+      merchantId: 1,
       providerId: 1,
       legalEntityId: 1,
-      _id: 0,
     };
 
+    if (filter.fields) {
+      currentProjection = {};
+      filter.fields.split(",").forEach((f) => {
+        currentProjection[f.trim()] = 1;
+      });
+      // Always include ID for internal consistency if not specified
+      currentProjection.id = 1;
+    }
+
     const [data, total] = await Promise.all([
-      TransactionModel.find(query, projection)
+      TransactionModel.find(query, currentProjection)
         .sort(sortOptions)
         .skip(skip)
         .limit(limit)
@@ -178,6 +184,7 @@ export class TransactionService {
         .join("/");
       return {
         ...txn,
+        createdAt: getShiftedISTDate(txn.createdAt),
         narration,
       };
     });
@@ -257,6 +264,7 @@ export class TransactionService {
 
     return ok({
       ...txn,
+      createdAt: getShiftedISTDate(txn.createdAt),
     } as any);
   }
 }
