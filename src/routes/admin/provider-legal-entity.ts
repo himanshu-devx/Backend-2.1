@@ -1,4 +1,3 @@
-console.log("LOADING PROVIDER LEGAL ENTITY ROUTES FILE");
 import { Hono } from "hono";
 import { ProviderLegalEntityController } from "@/controllers/admin/provider-legal-entity.controller";
 import { validateBody } from "@/middlewares/validate";
@@ -54,7 +53,5 @@ adminProviderRoutes.delete(
   validateBody(DeleteProviderFeeTierSchema),
   ProviderLegalEntityController.deletePayoutFee
 );
-
-adminProviderRoutes.post("/:id/onboard", ProviderLegalEntityController.onboard);
 
 export default adminProviderRoutes;

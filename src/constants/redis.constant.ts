@@ -30,6 +30,4 @@ export const RedisKeys = {
   },
   CHANNEL: (providerId: string, legalEntityId: string) =>
     `channel:${providerId}:${legalEntityId}`,
-  LEDGER_ACCOUNT: (ownerId: string, typeSlug: string) =>
-    `ledger_account:${ownerId}:${typeSlug}`,
 } as const;

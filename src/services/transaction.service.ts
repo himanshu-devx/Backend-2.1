@@ -2,7 +2,6 @@ import {
   TransactionModel,
   TransactionDocument,
 } from "@/models/transaction.model";
-import { TransactionEntityType } from "@/constants/transaction.constant";
 import { ListQueryDTO } from "@/dto/common.dto";
 import { Result, ok, err } from "@/utils/result";
 import { HttpError, NotFound, AppError } from "@/utils/error";
@@ -13,8 +12,6 @@ import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
 
 export interface TransactionListFilter extends ListQueryDTO {
   merchantId?: string; // Kept for alias
-  entityId?: string;
-  entityType?: string;
   providerId?: string;
   legalEntityId?: string;
   type?: string;
@@ -59,55 +56,14 @@ export class TransactionService {
       orderId,
       providerRef,
       utr,
-      entityId,
-      entityType,
       sort,
       category,
     } = filter;
 
     const query: any = {};
 
-    // Double Entry Logic: Filter by entity checks both source and destination
-    if (merchantId) {
-      // Legacy alias check
-      query.$or = [
-        { sourceEntityId: merchantId, sourceEntityType: TransactionEntityType.MERCHANT },
-        { destinationEntityId: merchantId, destinationEntityType: TransactionEntityType.MERCHANT }
-      ];
-    }
-
-    if (entityId) {
-      const entityCheck = [
-        { sourceEntityId: entityId },
-        { destinationEntityId: entityId }
-      ];
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, { $or: entityCheck }];
-        delete query.$or;
-      } else {
-        query.$or = entityCheck;
-      }
-    }
-
-    if (entityType) {
-      if (entityId) {
-        query.$or = [
-          { sourceEntityId: entityId, sourceEntityType: entityType },
-          { destinationEntityId: entityId, destinationEntityType: entityType }
-        ];
-        // Simplify constraint: if specifically asking for entity+type, override previous loose check
-        if (query.$and) delete query.$and;
-      } else {
-        query.$or = [
-          { sourceEntityType: entityType },
-          { destinationEntityType: entityType }
-        ];
-      }
-    }
-
     if (providerId) query.providerId = providerId;
-    if (legalEntityId) query.legalEntityId = legalEntityId;
-    if (providerId) query.providerId = providerId;
+    if (merchantId) query.merchantId = merchantId;
     if (legalEntityId) query.legalEntityId = legalEntityId;
     if (utr) query.utr = utr;
 
@@ -214,86 +170,15 @@ export class TransactionService {
       TransactionModel.countDocuments(query),
     ]);
 
-    // --- Entity Resolution ---
-    const merchantIds = new Set<string>();
-    const providerIds = new Set<string>();
-    const leIds = new Set<string>();
-    const pleIds = new Set<string>();
 
-    const collectId = (id: string | undefined, type: string | undefined) => {
-      if (!id || !type) return;
-      if (type === "MERCHANT") merchantIds.add(id);
-      if (type === "PROVIDER") providerIds.add(id);
-      if (type === "LEGAL_ENTITY") leIds.add(id);
-      if (type === "PROVIDER_LEGAL_ENTITY") pleIds.add(id);
-    };
-
-    data.forEach((t: any) => {
-      collectId(t.sourceEntityId, t.sourceEntityType);
-      collectId(t.destinationEntityId, t.destinationEntityType);
-    });
-
-    // Pre-fetch PLEs to ensure we have their constituent Provider/LE IDs
-    const ples = pleIds.size
-      ? await ProviderLegalEntityModel.find({ id: { $in: [...pleIds] } })
-        .select("id name providerId legalEntityId")
-        .lean()
-      : [];
-
-    ples.forEach((p: any) => {
-      if (p.providerId) providerIds.add(p.providerId);
-      if (p.legalEntityId) leIds.add(p.legalEntityId);
-    });
-
-    const [merchants, providers, les] = await Promise.all([
-      merchantIds.size
-        ? MerchantModel.find({ id: { $in: [...merchantIds] } })
-          .select("id displayName name")
-          .lean()
-        : [],
-      providerIds.size
-        ? ProviderModel.find({ id: { $in: [...providerIds] } })
-          .select("id name")
-          .lean()
-        : [],
-      leIds.size
-        ? LegalEntityModel.find({ id: { $in: [...leIds] } })
-          .select("id name")
-          .lean()
-        : [],
-    ]);
-
-    const nameMap = new Map<string, string>();
-    merchants.forEach((m: any) => nameMap.set(m.id, m.displayName || m.name));
-    providers.forEach((p: any) => nameMap.set(p.id, p.name));
-    les.forEach((l: any) => nameMap.set(l.id, l.name));
-
-    ples.forEach((ple: any) => {
-      if (ple.name) {
-        nameMap.set(ple.id, ple.name);
-      } else {
-        const pName = nameMap.get(ple.providerId) || ple.providerId;
-        const lName = nameMap.get(ple.legalEntityId) || ple.legalEntityId;
-        nameMap.set(ple.id, `${pName} - ${lName}`);
-      }
-    });
 
     const enrichedData = data.map((txn: any) => {
-      const ref = txn.providerRef || txn.orderId || txn.id || "";
-
-      const sourceName = nameMap.get(txn.sourceEntityId) || txn.sourceEntityType || "UNKNOWN";
-      const destName = nameMap.get(txn.destinationEntityId) || txn.destinationEntityType || "UNKNOWN";
-
       const narration = [txn.type, txn.paymentMode, txn.utr]
         .filter(Boolean)
         .join("/");
-
       return {
         ...txn,
-        sourceEntityName: sourceName,
-        destinationEntityName: destName,
         narration,
-        utr: txn.utr || null, // Ensure UTR is present
       };
     });
 
@@ -315,7 +200,6 @@ export class TransactionService {
     identifier: string,
     scope?: {
       merchantId?: string;
-      providerId?: string;
     }
   ): Promise<Result<TransactionDocument, HttpError>> {
     // Search by transaction ID
@@ -324,54 +208,33 @@ export class TransactionService {
     };
 
     if (scope?.merchantId) {
-      // Allow access if merchantId matches OR if source/dest entity is this merchant
       query.$and = [
         {
           $or: [
             { merchantId: scope.merchantId },
-            { sourceEntityId: scope.merchantId },
-            { destinationEntityId: scope.merchantId },
           ],
         },
       ];
     }
-    // Future: if (scope?.providerId) query.providerId = scope.providerId;
 
     const txn = await TransactionModel.findOne(query).lean();
     if (!txn) {
       return err(NotFound("Transaction not found"));
     }
 
-    // --- Entity Resolution for Single Transaction ---
     const merchantIds = new Set<string>();
-    const providerIds = new Set<string>();
     const leIds = new Set<string>();
     const pleIds = new Set<string>();
 
-    const collectId = (id: string | undefined, type: string | undefined) => {
-      if (!id || !type) return;
-      if (type === "MERCHANT") merchantIds.add(id);
-      if (type === "PROVIDER") providerIds.add(id);
-      if (type === "LEGAL_ENTITY") leIds.add(id);
-      if (type === "PROVIDER_LEGAL_ENTITY") pleIds.add(id);
-    };
-
-    collectId(txn.sourceEntityId, txn.sourceEntityType);
-    collectId(txn.destinationEntityId, txn.destinationEntityType);
-
-    const [merchants, providers, les, ples] = await Promise.all([
+    const [merchants, les, ples] = await Promise.all([
       merchantIds.size ? MerchantModel.find({ id: { $in: [...merchantIds] } }).select("id displayName name").lean() : [],
-      providerIds.size ? ProviderModel.find({ id: { $in: [...providerIds] } }).select("id name").lean() : [],
       leIds.size ? LegalEntityModel.find({ id: { $in: [...leIds] } }).select("id name").lean() : [],
       pleIds.size ? ProviderLegalEntityModel.find({ id: { $in: [...pleIds] } }).lean() : [],
     ]);
 
     const nameMap = new Map<string, string>();
     merchants.forEach((m: any) => nameMap.set(m.id, m.displayName || m.name));
-    providers.forEach((p: any) => nameMap.set(p.id, p.name));
     les.forEach((l: any) => nameMap.set(l.id, l.name));
-
-    // Manually resolve PLE component names to avoid CastError on populate
     if (ples.length > 0) {
       const pIds = new Set(ples.map((p: any) => p.providerId));
       const lIds = new Set(ples.map((p: any) => p.legalEntityId));
@@ -392,83 +255,8 @@ export class TransactionService {
       });
     }
 
-    const sourceName = nameMap.get(txn.sourceEntityId) || txn.sourceEntityType || "UNKNOWN";
-    const destName = nameMap.get(txn.destinationEntityId) || txn.destinationEntityType || "UNKNOWN";
-
-    (txn as any).sourceEntityName = sourceName;
-    (txn as any).destinationEntityName = destName;
-
-    // Enrich with Ledger Transfers (Always fetch live from TigerBeetle for accuracy as requested)
-    let transfers: any[] = [];
-
-    // Extract all potential IDs from meta
-    const idsToLookup: bigint[] = [];
-    const meta = txn.meta || {};
-
-    if (meta.transferId) idsToLookup.push(BigInt(meta.transferId));
-    if (meta.feeTransferId) idsToLookup.push(BigInt(meta.feeTransferId));
-    if (Array.isArray(meta.transferIds)) {
-      meta.transferIds.forEach((id: string) => idsToLookup.push(BigInt(id)));
-    }
-
-    if (idsToLookup.length > 0) {
-      try {
-        const { LedgerService } = await import(
-          "@/services/ledger/ledger.service"
-        );
-        const { AccountManagerService } = await import(
-          "@/services/ledger/account-manager.service"
-        );
-
-        // Use a set to avoid duplicate lookups
-        const uniqueIds = [...new Set(idsToLookup)];
-        const tbTransfers = await LedgerService.lookupTransfers(uniqueIds);
-
-        // Resolve owner details for all involved accounts
-        const allAccIds = tbTransfers.flatMap((t) => [
-          t.debit_account_id.toString(),
-          t.credit_account_id.toString(),
-        ]);
-        const accountMap = await AccountManagerService.resolveAccountDetails([
-          ...new Set(allAccIds),
-        ]);
-
-        // Map TB transfers to plain objects for the response
-        tbTransfers.forEach((t) => {
-          const tId = t.id.toString();
-          const dId = t.debit_account_id.toString();
-          const cId = t.credit_account_id.toString();
-          const dDet = accountMap.get(dId);
-          const cDet = accountMap.get(cId);
-
-          transfers.push({
-            id: tId,
-            debitAccountId: dId,
-            debitOwnerType: dDet?.ownerType,
-            debitOwnerName: dDet?.ownerName,
-            creditAccountId: cId,
-            creditOwnerType: cDet?.ownerType,
-            creditOwnerName: cDet?.ownerName,
-            amount: t.amount.toString(),
-            code: t.code,
-            flags: t.flags,
-            timestamp: t.timestamp.toString(),
-            isFee: tId === meta.feeTransferId,
-          });
-        });
-      } catch (e) {
-        console.error("Failed to enrich transaction with live TigerBeetle transfers:", e);
-        // Fallback to snapshot if TB lookup fails
-        transfers = txn.meta?.ledgerTransfers || [];
-      }
-    } else {
-      // No IDs to lookup, use snapshot if available
-      transfers = txn.meta?.ledgerTransfers || [];
-    }
-
     return ok({
       ...txn,
-      ledgerTransfers: transfers,
     } as any);
   }
 }

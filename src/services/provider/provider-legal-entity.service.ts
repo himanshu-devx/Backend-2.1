@@ -113,44 +113,30 @@ export class ProviderLegalEntityService {
     const result = await providerLegalEntityRepository.findAll(query);
 
     if (result.data.length > 0) {
-      try {
-        const ids = result.data.map((ple) => ple.id);
-        const { AccountManagerService } = await import(
-          "@/services/ledger/account-manager.service"
-        );
-        const accountMap = await AccountManagerService.getAccountsForOwners(
-          ids,
-          "PROVIDER_LEGAL_ENTITY"
-        );
+      const simplifiedData = result.data.map((doc: any) => {
+        const ple = doc.toJSON ? doc.toJSON() : doc;
 
-        const simplifiedData = result.data.map((doc: any) => {
-          const ple = doc.toJSON ? doc.toJSON() : doc;
-          const accounts = accountMap.get(ple.id);
+        const pName = ple.provider?.name || ple.provider?.displayName || ple.providerId;
+        const lName = ple.legalEntity?.name || ple.legalEntity?.displayName || ple.legalEntityId;
+        const formattedName = `ple- (${pName} - ${lName})`;
 
-          const pName = ple.provider?.name || ple.provider?.displayName || ple.providerId;
-          const lName = ple.legalEntity?.name || ple.legalEntity?.displayName || ple.legalEntityId;
-          const formattedName = `ple- (${pName} - ${lName})`;
+        return {
+          id: ple.id,
+          name: ple.name && !ple.name.includes("REF-P") ? ple.name : formattedName,
+          providerId: ple.providerId,
+          legalEntityId: ple.legalEntityId,
+          status: ple.status,
+          createdAt: ple.createdAt,
+          provider: ple.provider,
+          legalEntity: ple.legalEntity,
+          isOnboard: ple.isOnboard,
+          payinAccount: null,
+          payoutAccount: null,
+          expenseAccount: null,
+        };
+      });
 
-          return {
-            id: ple.id,
-            name: ple.name && !ple.name.includes("REF-P") ? ple.name : formattedName,
-            providerId: ple.providerId,
-            legalEntityId: ple.legalEntityId,
-            status: ple.status,
-            createdAt: ple.createdAt,
-            provider: ple.provider,
-            legalEntity: ple.legalEntity,
-            isOnboard: ple.isOnboard,
-            payinAccount: accounts?.payin || null,
-            payoutAccount: accounts?.payout || null,
-            expenseAccount: accounts?.expense || null,
-          };
-        });
-
-        result.data = simplifiedData as any;
-      } catch (error) {
-        console.error("Failed to enrich PLEs with balances:", error);
-      }
+      result.data = simplifiedData as any;
     }
 
     return ok(result);
@@ -164,36 +150,20 @@ export class ProviderLegalEntityService {
 
     const pleObj = ple.toObject ? ple.toObject() : (ple as any);
 
-    try {
-      const { AccountManagerService } = await import("@/services/ledger/account-manager.service");
-      const accountMap = await AccountManagerService.getAccountsForOwners([id], "PROVIDER_LEGAL_ENTITY");
-      const accounts = accountMap.get(id);
+    pleObj.payinAccount = null;
+    pleObj.payoutAccount = null;
+    pleObj.expenseAccount = null;
 
-      if (accounts) {
-        pleObj.payinAccount = accounts.payin || null;
-        pleObj.payoutAccount = accounts.payout || null;
-        pleObj.expenseAccount = accounts.expense || null;
-      } else {
-        pleObj.payinAccount = null;
-        pleObj.payoutAccount = null;
-        pleObj.expenseAccount = null;
-      }
-
-      // Add formatted name if not present
-      if (!pleObj.name) {
-        // We might need to fetch provider/LE names if not in pleObj
-        const { ProviderModel } = await import("@/models/provider.model");
-        const { LegalEntityModel } = await import("@/models/legal-entity.model");
-        const [provider, le] = await Promise.all([
-          ProviderModel.findOne({ id: pleObj.providerId }).select("name displayName"),
-          LegalEntityModel.findOne({ id: pleObj.legalEntityId }).select("name displayName"),
-        ]);
-        const pName = provider?.name || provider?.displayName || pleObj.providerId;
-        const lName = le?.name || le?.displayName || pleObj.legalEntityId;
-        pleObj.name = `ple- (${pName} - ${lName})`;
-      }
-    } catch (e) {
-      console.error("Failed to enrich PLE details:", e);
+    if (!pleObj.name) {
+      const { ProviderModel } = await import("@/models/provider.model");
+      const { LegalEntityModel } = await import("@/models/legal-entity.model");
+      const [provider, le] = await Promise.all([
+        ProviderModel.findOne({ id: pleObj.providerId }).select("name displayName"),
+        LegalEntityModel.findOne({ id: pleObj.legalEntityId }).select("name displayName"),
+      ]);
+      const pName = provider?.name || provider?.displayName || pleObj.providerId;
+      const lName = le?.name || le?.displayName || pleObj.legalEntityId;
+      pleObj.name = `ple- (${pName} - ${lName})`;
     }
 
     return ok(pleObj);
@@ -291,35 +261,6 @@ export class ProviderLegalEntityService {
       const { generateCustomId } = await import("@/utils/id.util");
       data.id = await generateCustomId("PLE", "provider_legal_entity");
     }
-
-    // --- AUTOMATED PROVISIONING ---
-    let accounts;
-    try {
-      const { AccountManagerService } = await import(
-        "@/services/ledger/account-manager.service"
-      );
-      // Provision accounts via AccountManager
-      const result =
-        await AccountManagerService.provisionProviderLegalEntityAccounts(
-          data.id!
-        );
-      if (!result.ok) throw result.error;
-      accounts = result.value.ids;
-    } catch (e: any) {
-      return err(
-        BadRequest(
-          `Failed to provision TigerBeetle accounts: ${e.message || "Unknown error"
-          }`
-        )
-      );
-    }
-
-    // Assign provisioned IDs to data
-    if (!data.payin) data.payin = {} as any;
-    // Removed direct account assignment as we use centralized lookup now.
-
-    if (!data.payout) data.payout = {} as any;
-    // Removed direct account assignment.
 
     data.isOnboard = true;
 
@@ -527,36 +468,5 @@ export class ProviderLegalEntityService {
     await CacheService.invalidateChannel(ple.providerId, ple.legalEntityId);
 
     return ok(updated);
-  }
-
-  static async onboard(
-    id: string
-  ): Promise<Result<ProviderLegalEntityDocument, HttpError>> {
-    const ple = await providerLegalEntityRepository.findOne({ id: id });
-    if (!ple) return err(NotFound("Provider Legal Entity not found"));
-
-    try {
-      const { AccountManagerService } = await import(
-        "@/services/ledger/account-manager.service"
-      );
-      const result =
-        await AccountManagerService.provisionProviderLegalEntityAccounts(id);
-      if (!result.ok) throw result.error;
-
-      ple.isOnboard = true;
-      await ple.save();
-
-      // Invalidate Cache
-      const { CacheService } = await import("@/services/common/cache.service");
-      await CacheService.invalidateChannel(ple.providerId, ple.legalEntityId);
-
-      return ok(ple);
-    } catch (e: any) {
-      return err(
-        BadRequest(
-          `Failed to provision accounts: ${e.message || "Unknown error"}`
-        )
-      );
-    }
   }
 }

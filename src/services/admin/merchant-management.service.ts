@@ -9,8 +9,6 @@ import {
 import { merchantRepository } from "@/repositories/merchant.repository";
 import { AuditService } from "../common/audit.service";
 import { AuditContext } from "@/utils/audit.util";
-import { redis } from "@/infra/redis-instance";
-import { RedisKeys } from "@/constants/redis.constant";
 import { ProviderModel } from "@/models/provider.model";
 import { LegalEntityModel } from "@/models/legal-entity.model";
 import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
@@ -19,8 +17,6 @@ import argon2 from "argon2";
 import crypto from "crypto";
 import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { TransactionType } from "@/constants/transaction.constant";
-import { LedgerAccountModel } from "@/models/ledger-account.model";
-import { ACCOUNT_TYPE } from "@/constants/tigerbeetle.constant";
 
 export class MerchantManagementService {
   static async getMerchantList(
@@ -60,31 +56,7 @@ export class MerchantManagementService {
       };
     });
 
-    // 1. Collect Merchant IDs
-    const merchantIds = sanitizedData.map((m: any) => m.id);
-
-    // 2. Enrich with Ledger Accounts & Balances
-    try {
-      const { AccountManagerService } = await import("@/services/ledger/account-manager.service");
-      const accountMap = await AccountManagerService.getAccountsForOwners(merchantIds, "MERCHANT");
-
-      sanitizedData.forEach((merchant: any) => {
-        const accounts = accountMap.get(merchant.id);
-        if (accounts) {
-          // Flatten structure as per request or keep nested?
-          // User asked: "payin:{blanace, accountid}"
-          if (accounts.payin) merchant.payinAccount = accounts.payin;
-          if (accounts.payout) merchant.payoutAccount = accounts.payout;
-          if (accounts.hold) merchant.holdAccount = accounts.hold;
-        } else {
-          merchant.payinAccount = null;
-          merchant.payoutAccount = null;
-          merchant.holdAccount = null;
-        }
-      });
-    } catch (error) {
-      console.error("Failed to enrich merchants with ledger data:", error);
-    }
+    // Ledger account enrichment removed (ledger-only mode)
 
     return ok({ data: sanitizedData, meta: listResult.meta });
   }

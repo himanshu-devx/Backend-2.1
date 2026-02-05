@@ -101,10 +101,4 @@ export class ProviderLegalEntityController {
     );
     return handleResult(c, result);
   }
-
-  static async onboard(c: Context) {
-    const id = c.req.param("id");
-    const result = await ProviderLegalEntityService.onboard(id);
-    return handleResult(c, result);
-  }
 }

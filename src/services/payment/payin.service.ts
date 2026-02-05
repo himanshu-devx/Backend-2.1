@@ -1,12 +1,9 @@
 import crypto from "crypto";
 import { TransactionModel, TransactionStatus, TransactionDocument } from "@/models/transaction.model";
-import { TransactionEntityType, TransactionPartyType, TransactionType } from "@/constants/transaction.constant";
+import { TransactionPartyType, TransactionType } from "@/constants/transaction.constant";
 import { Forbidden, NotFound } from "@/utils/error";
 import { redis } from "@/infra/redis-instance";
-import { LedgerService } from "@/services/ledger/ledger.service";
-import { ACCOUNT_TYPE } from "@/constants/tigerbeetle.constant";
 import { CacheService } from "@/services/common/cache.service";
-import { AccountManagerService } from "@/services/ledger/account-manager.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 
@@ -120,89 +117,6 @@ export class PayinService {
         return { routing, channel };
     }
 
-    private async executeMoneyMovement(
-        transaction: TransactionDocument,
-        merchantId: string,
-        channelId: string,
-        amount: number,
-        fees: any
-    ) {
-        let merchantAccount = await CacheService.getLedgerAccount(merchantId, ACCOUNT_TYPE.MERCHANT_PAYIN.slug);
-        if (!merchantAccount) {
-            await AccountManagerService.provisionMerchantAccounts(merchantId);
-            merchantAccount = await CacheService.getLedgerAccount(merchantId, ACCOUNT_TYPE.MERCHANT_PAYIN.slug);
-        }
-
-        let pleAvailableAccount = await CacheService.getLedgerAccount(channelId, ACCOUNT_TYPE.PROVIDER_PAYIN.slug);
-        if (!pleAvailableAccount) {
-            await AccountManagerService.provisionProviderLegalEntityAccounts(channelId);
-            pleAvailableAccount = await CacheService.getLedgerAccount(channelId, ACCOUNT_TYPE.PROVIDER_PAYIN.slug);
-        }
-
-        // Fetch Income Account (Assuming fixed ID for now or lookup)
-        // Ideally checking CacheService or finding by TypeSlug globally
-        // const { LedgerAccountModel } = await import("@/models/ledger-account.model");
-        // let incomeAccountDoc = await LedgerAccountModel.findOne({ typeSlug: ACCOUNT_TYPE.SUPER_ADMIN_INCOME.slug });
-
-        // if (!incomeAccountDoc) {
-        // Auto provision super admin
-        // We need an admin ID. For now system fallback or look up an admin.
-        // This corresponds to a specific admin ID in the provisioning function.
-        // Skipping auto-provision for SA for now as it requires an Admin ID param.
-        // But we should at least log or throw clear error.
-        // }
-
-        if (!merchantAccount || !pleAvailableAccount) {
-            throw new Error(`Ledger accounts (Merchant, PLE, or Income) not initialized. Merchant: ${!!merchantAccount}, PLE: ${!!pleAvailableAccount}`);
-        }
-
-        const merchantFees = transaction.fees.merchantFees || { total: 0 };
-        const feeAmount = BigInt(Math.round(merchantFees.total * 100));
-
-        // Use pre-calculated Net Amount from Model
-        const netAmount = BigInt(Math.round(transaction.netAmount * 100));
-
-        // 1. Credit Merchant with NET Amount
-        // PLE Available -> Merchant Available
-        const principalTransfer = await LedgerService.createTransfer(
-            pleAvailableAccount.accountId,
-            merchantAccount.accountId,
-            netAmount,
-            merchantAccount.currency,
-            {
-                actorId: "SYSTEM",
-                actorType: "SYSTEM",
-                reason: "Payin Net Settlement",
-                meta: { transactionId: transaction.id }
-            }
-        );
-
-        // 2. Credit Income with Fees (Directly from PLE)
-        // PLE Available -> Income
-        // let feeTransfer = null;
-        // if (feeAmount > 0n) {
-        //     feeTransfer = await LedgerService.createTransfer(
-        //         pleAvailableAccount.accountId,
-        //         "",
-        //         feeAmount,
-        //         merchantAccount.currency,
-        //         {
-        //             actorId: "SYSTEM",
-        //             actorType: "SYSTEM",
-        //             reason: "Payin Fees",
-        //             meta: { transactionId: transaction.id }
-        //         }
-        //     );
-        // }
-
-        transaction.meta.set("transferId", principalTransfer.id.toString());
-        // if (feeTransfer) {
-        //     transaction.meta.set("feeTransferId", feeTransfer.id.toString());
-        // }
-
-        return principalTransfer;
-    }
-
     async createPayin(merchantId: string, data: CreateTransactionDto, requestIp: string): Promise<TransactionDocument> {
         // 1. Merchant Check (Fast Fail - No Transaction yet)
         const { merchant, config } = await this.checkMerchantConfig(merchantId, requestIp);
@@ -216,26 +130,14 @@ export class PayinService {
             throw Forbidden(`Transaction with Order ID ${data.orderId} already exists.`);
         }
 
-        // Pre-calculate Merchant Fees for Net Amount
         const merchantFees = this.calculateFees(data.amount, config.fees);
-        // Payin: Net = Amount - Fees
         const netAmount = this.round(data.amount - merchantFees.total);
 
-        // 2. Create Transaction IMMEDIATELY for Audit Trail
         const transaction = new TransactionModel({
-            // Double Entry: Source = Provider Channel (Gateway), Dest = Merchant
-            sourceEntityId: "WORLD", // Placeholder until resolved or strictly "EXTERNAL"
-            sourceEntityType: TransactionEntityType.WORLD, // It's a user paying
-
-            destinationEntityId: merchant.id,
-            destinationEntityType: TransactionEntityType.MERCHANT,
-
             merchantId: merchant.id,
-            // providerId/linkages set later
-
             type: TransactionType.PAYIN,
             amount: data.amount,
-            netAmount: netAmount, // Set required field
+            netAmount: netAmount,
             currency: "INR",
             paymentMode: data.paymentMode, // Capture paymentMode from input
             remarks: data.remarks,
@@ -282,14 +184,6 @@ export class PayinService {
             transaction.providerId = routing.providerId;
             transaction.legalEntityId = routing.legalEntityId;
             transaction.providerLegalEntityId = channel.id;
-
-            // Source = Provider Legal Entity (Channel), Dest = Merchant
-            transaction.sourceEntityId = channel.id;
-            transaction.sourceEntityType = TransactionEntityType.PROVIDER_LEGAL_ENTITY;
-
-            transaction.destinationEntityId = merchant.id;
-            transaction.destinationEntityType = TransactionEntityType.MERCHANT;
-
             // 4. Fees
             // Merchant fees already calculated. Provider fees depend on channel.
             const providerFees = this.calculateFees(data.amount, channel.payin.fees);
@@ -314,16 +208,6 @@ export class PayinService {
                         payload: { mode: "WEBHOOK_TRIGGER", remarks: data.remarks }
                     });
 
-                    // Execute Money Movement for SUCCESS
-                    await this.executeMoneyMovement(transaction, merchant.id, channel.id, data.amount, merchantFees);
-
-                    // Event: LEDGER_CREATED
-                    transaction.events.push({
-                        type: "LEDGER_CREATED",
-                        timestamp: getISTDate(),
-                        payload: { transferType: "NET_SETTLEMENT" }
-                    });
-
                     // Webhook Event
                     transaction.events.push({
                         type: "WEBHOOK_TRIGGER",
@@ -340,51 +224,6 @@ export class PayinService {
                 } else if (remarkUpper === "PENDING") {
                     // Simulated Pending - Create PENDING ledger transfer
                     transaction.providerRef = this.generateProviderRef();
-
-                    // Execute Money Movement with PENDING flag
-                    const { TB_TRANSFER_FLAGS } = await import("@/constants/tigerbeetle.constant");
-
-                    let merchantAccount = await CacheService.getLedgerAccount(merchant.id, ACCOUNT_TYPE.MERCHANT_PAYIN.slug);
-                    if (!merchantAccount) {
-                        await AccountManagerService.provisionMerchantAccounts(merchant.id);
-                        merchantAccount = await CacheService.getLedgerAccount(merchant.id, ACCOUNT_TYPE.MERCHANT_PAYIN.slug);
-                    }
-
-                    let pleAvailableAccount = await CacheService.getLedgerAccount(channel.id, ACCOUNT_TYPE.PROVIDER_PAYIN.slug);
-                    if (!pleAvailableAccount) {
-                        await AccountManagerService.provisionProviderLegalEntityAccounts(channel.id);
-                        pleAvailableAccount = await CacheService.getLedgerAccount(channel.id, ACCOUNT_TYPE.PROVIDER_PAYIN.slug);
-                    }
-
-                    if (!merchantAccount || !pleAvailableAccount) {
-                        throw new Error(`Ledger accounts not initialized for PENDING transfer`);
-                    }
-
-                    const netAmount = BigInt(Math.round(transaction.netAmount * 100));
-
-                    // Create PENDING transfer
-                    const pendingTransfer = await LedgerService.createTransfer(
-                        pleAvailableAccount.accountId,
-                        merchantAccount.accountId,
-                        netAmount,
-                        merchantAccount.currency,
-                        {
-                            actorId: "SYSTEM",
-                            actorType: "SYSTEM",
-                            reason: "Payin Pending Settlement",
-                            meta: { transactionId: transaction.id }
-                        },
-                        TB_TRANSFER_FLAGS.PENDING
-                    );
-
-                    transaction.meta.set("transferId", pendingTransfer.id.toString());
-                    transaction.meta.set("ledgerStatus", "PENDING");
-
-                    transaction.events.push({
-                        type: "LEDGER_CREATED",
-                        timestamp: getISTDate(),
-                        payload: { transferType: "NET_SETTLEMENT", status: "PENDING" }
-                    });
 
                     transaction.events.push({
                         type: "PENDING",
@@ -420,19 +259,11 @@ export class PayinService {
                 }
             }
 
-            // 5. Money Movement (Real Mode - no remark provided)
-            await this.executeMoneyMovement(transaction, merchant.id, channel.id, data.amount, merchantFees);
-
             transaction.status = TransactionStatus.SUCCESS;
             transaction.providerRef = this.generateProviderRef();
             transaction.utr = this.generateUTR();
 
-            // Event: LEDGER_CREATED & SUCCESS
-            transaction.events.push({
-                type: "LEDGER_CREATED",
-                timestamp: getISTDate(),
-                payload: { transferType: "NET_SETTLEMENT" }
-            });
+
             transaction.events.push({
                 type: "SUCCESS",
                 timestamp: getISTDate(),
@@ -463,15 +294,6 @@ export class PayinService {
                 timestamp: getISTDate(),
                 payload: { error: error.message }
             });
-
-            // Refund Logic (Stub)
-            if (transaction.meta.get("transferId")) {
-                transaction.events.push({
-                    type: "REFUND_NEEDED",
-                    timestamp: getISTDate(),
-                    payload: { reason: "Partial failure after principal transfer" }
-                });
-            }
 
             // Webhook Event
             transaction.events.push({

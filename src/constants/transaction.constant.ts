@@ -21,18 +21,14 @@ export enum TransactionType {
     LE_INCOME_SETTLE = "LE_INCOME_SETTLE",
 }
 
-export enum TransactionEntityType {
+export enum TransactionPartyType {
+    CUSTOMER = "CUSTOMER",
+    BENEFICIARY = "BENEFICIARY",
     MERCHANT = "MERCHANT",
     PROVIDER_LEGAL_ENTITY = "PROVIDER_LEGAL_ENTITY",
     LEGAL_ENTITY = "LEGAL_ENTITY",
     SYSTEM = "SYSTEM",
     SUPER_ADMIN = "SUPER_ADMIN",
     WORLD = "WORLD",
-}
-
-export enum TransactionPartyType {
-    CUSTOMER = "CUSTOMER",
-    BENEFICIARY = "BENEFICIARY",
     OTHER = "OTHER",
-    SELF = "SELF",
 }

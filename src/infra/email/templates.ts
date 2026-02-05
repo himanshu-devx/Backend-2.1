@@ -37,16 +37,14 @@ const baseEmailLayout = (bodyContentHtml: string) => `
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Email Notification</title>
   </head>
-  <body style="margin: 0; padding: 0; background-color: #f4f4f4; ${
-    baseStyles.font
+  <body style="margin: 0; padding: 0; background-color: #f4f4f4; ${baseStyles.font
   }">
       <div style="padding: 30px 0;">
           <div style="${baseStyles.container}">
               
               <div style="${baseStyles.header}">
-                  <a href="#" style="${baseStyles.headerLogo}">${
-  ENV.APP_BRAND_NAME
-}</a>
+                  <a href="#" style="${baseStyles.headerLogo}">${ENV.APP_BRAND_NAME
+  }</a>
               </div>
               
               <div style="${baseStyles.content}">
@@ -54,14 +52,11 @@ const baseEmailLayout = (bodyContentHtml: string) => `
               </div>
               
               <div style="${baseStyles.footer}">
-                  <p>Questions? Contact our support team: <a href="mailto:${
-                    ENV.SMTP_USER
-                  }" style="color: ${COLORS.primary}; text-decoration: none;">${
-  ENV.SMTP_USER
-}</a></p>
-                  <p>This is an automated message. Please do not reply directly. | &copy; ${new Date().getFullYear()} ${
-  ENV.APP_BRAND_NAME
-}.</p>
+                  <p>Questions? Contact our support team: <a href="mailto:${ENV.SMTP_USER
+  }" style="color: ${COLORS.primary}; text-decoration: none;">${ENV.SMTP_USER
+  }</a></p>
+                  <p>This is an automated message. Please do not reply directly. | &copy; ${new Date().getFullYear()} ${ENV.APP_BRAND_NAME
+  }.</p>
               </div>
 
           </div>
@@ -124,32 +119,25 @@ export const emailTemplates: EmailTemplateFnMap = {
   // 1. 🤝 MERCHANT WELCOME Template
   MERCHANT_WELCOME: (ctx) => {
     const bodyContent = `
-      <h1 style="color: ${
-        COLORS.primary
+      <h1 style="color: ${COLORS.primary
       }; font-size: 26px;">Welcome Aboard, <strong>${ctx.name}</strong>!</h1>
-      <p>We are thrilled to have you as a new merchant on ${
-        ENV.APP_BRAND_NAME
+      <p>We are thrilled to have you as a new merchant on ${ENV.APP_BRAND_NAME
       }. Your account is ready.</p>
 
-      <h3 style="color: ${
-        COLORS.textDark
+      <h3 style="color: ${COLORS.textDark
       }; margin-top: 25px;">🔑 Your Login Credentials:</h3>
       <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
         <tr>
-          <td style="${
-            baseStyles.tableHeader
-          }"><strong>Login ID (Email/Username):</strong></td>
-          <td style="${baseStyles.tableData}; color: ${COLORS.primary};">${
-      ctx.loginId
-    }</td>
+          <td style="${baseStyles.tableHeader
+      }"><strong>Login ID (Email/Username):</strong></td>
+          <td style="${baseStyles.tableData}; color: ${COLORS.primary};">${ctx.loginId
+      }</td>
         </tr>
         <tr>
-          <td style="${
-            baseStyles.tableHeader
-          }"><strong>Temporary Password:</strong></td>
-          <td style="${baseStyles.tableData}; color: #dc3545;">${
-      ctx.initialPassword
-    }</td>
+          <td style="${baseStyles.tableHeader
+      }"><strong>Temporary Password:</strong></td>
+          <td style="${baseStyles.tableData}; color: #dc3545;">${ctx.initialPassword
+      }</td>
         </tr>
       </table>
 
@@ -159,8 +147,8 @@ export const emailTemplates: EmailTemplateFnMap = {
       
       <p style="text-align: center;">
         <a href="${ctx.loginURL}" style="${baseStyles.button(
-      COLORS.success
-    )}">Go to Login Page</a>
+        COLORS.success
+      )}">Go to Login Page</a>
       </p>
 
       <p>Please use the 'Reset Password' link on the login page to initiate a secure change of your temporary password.</p>
@@ -176,41 +164,32 @@ export const emailTemplates: EmailTemplateFnMap = {
   // 2. 👑 ADMIN WELCOME Template
   ADMIN_WELCOME: (ctx) => {
     const bodyContent = `
-      <h1 style="color: ${
-        COLORS.primary
+      <h1 style="color: ${COLORS.primary
       }; font-size: 26px;">Administrator Access Granted</h1>
       <p>Hello <strong>${ctx.name}</strong>, </p>
-      <p>Your administrator account for <strong>${
-        ENV.APP_BRAND_NAME
+      <p>Your administrator account for <strong>${ENV.APP_BRAND_NAME
       }</strong> is active. Below are your temporary credentials and role details.</p>
       
-      <h3 style="color: ${
-        COLORS.textDark
+      <h3 style="color: ${COLORS.textDark
       }; margin-top: 25px;">🔑 Account Details:</h3>
       <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
         <tr>
-          <td style="${
-            baseStyles.tableHeader
-          }"><strong>Login ID (Email/Username):</strong></td>
-          <td style="${baseStyles.tableData}; color: ${COLORS.primary};">${
-      ctx.loginId
-    }</td>
+          <td style="${baseStyles.tableHeader
+      }"><strong>Login ID (Email/Username):</strong></td>
+          <td style="${baseStyles.tableData}; color: ${COLORS.primary};">${ctx.loginId
+      }</td>
         </tr>
         <tr>
-          <td style="${
-            baseStyles.tableHeader
-          }"><strong>Temporary Password:</strong></td>
-          <td style="${baseStyles.tableData}; color: #dc3545;">${
-      ctx.initialPassword
-    }</td>
+          <td style="${baseStyles.tableHeader
+      }"><strong>Temporary Password:</strong></td>
+          <td style="${baseStyles.tableData}; color: #dc3545;">${ctx.initialPassword
+      }</td>
         </tr>
         <tr>
-          <td style="${
-            baseStyles.tableHeader
-          }"><strong>Assigned Role:</strong></td>
-          <td style="${baseStyles.tableData}; color: ${
-      COLORS.primary
-    }; font-weight: 700;">${ctx.role}</td>
+          <td style="${baseStyles.tableHeader
+      }"><strong>Assigned Role:</strong></td>
+          <td style="${baseStyles.tableData}; color: ${COLORS.primary
+      }; font-weight: 700;">${ctx.role}</td>
         </tr>
       </table>
       
@@ -219,8 +198,8 @@ export const emailTemplates: EmailTemplateFnMap = {
       
       <p style="text-align: center;">
         <a href="${ctx.loginUrl}" style="${baseStyles.button(
-      COLORS.primary
-    )}">Go to Login Page</a>
+        COLORS.primary
+      )}">Go to Login Page</a>
       </p>
     `;
 
@@ -241,8 +220,8 @@ export const emailTemplates: EmailTemplateFnMap = {
         
         <div style="margin: 35px 0;">
           <a href="${ctx.resetLink}" style="${baseStyles
-            .button(COLORS.warning)
-            .replace("color: #ffffff", "color: #000000")}; padding: 16px 40px; border-radius: 50px;">Reset Password</a>
+        .button(COLORS.warning)
+        .replace("color: #ffffff", "color: #000000")}; padding: 16px 40px; border-radius: 50px;">Reset Password</a>
         </div>
 
         <p style="font-size: 13px; color: #888; margin-top: 30px;"><strong>Link valid for 1 hour.</strong> If you didn't request this, you can safely ignore this email.</p>
@@ -250,9 +229,8 @@ export const emailTemplates: EmailTemplateFnMap = {
         <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;" />
         
         <p style="font-size: 12px; color: #999;">If the button doesn't work, copy this link:</p>
-        <p style="font-size: 12px; word-break: break-all;"><a href="${
-          ctx.resetLink
-        }" style="color: ${COLORS.primary};">${ctx.resetLink}</a></p>
+        <p style="font-size: 12px; word-break: break-all;"><a href="${ctx.resetLink
+      }" style="color: ${COLORS.primary};">${ctx.resetLink}</a></p>
       </div>
     `;
 

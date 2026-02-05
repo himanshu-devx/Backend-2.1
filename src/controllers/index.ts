@@ -4,5 +4,4 @@ export { MerchantManagementController } from "./admin/merchant-management.contro
 export { MerchantSelfController } from "./merchant/merchant-self.controller";
 export { LoginHistoryController } from "./login-history.controller";
 export { TransactionController } from "./transaction.controller"; // Assuming this exists or moved
-export { BalanceController } from "./balance.controller";
 export { AuthController } from "./auth.controller";

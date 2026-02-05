@@ -4,7 +4,6 @@ import { ok, err, Result } from "@/utils/result";
 import {
   AppError,
   Conflict,
-  Forbidden,
   HttpError,
   NotFound,
   Unauthorized,
@@ -29,7 +28,6 @@ import { LoginHistoryService } from "@/services/common/login-history.service";
 import { LoginStatus, ActorType } from "@/models/login-history.model";
 import { validateAdminIp } from "@/utils/ip-validation.util";
 import argon2 from "argon2";
-import { AccountManagerService } from "@/services/ledger/account-manager.service";
 import { randomBytes } from "crypto";
 
 export class AdminService {
@@ -107,9 +105,6 @@ export class AdminService {
           metadata: { newAdminEmail: admin.email },
         });
       }
-
-      // Provision Ledger Account for Super Admin
-      await AccountManagerService.provisionSuperAdminAccount(admin.id);
 
       return ok(admin);
     } catch (error) {
@@ -830,20 +825,6 @@ export class AdminService {
     let resultMetadata: any = null;
 
     try {
-      const { AccountManagerService } = await import(
-        "@/services/ledger/account-manager.service"
-      );
-
-      // 1. Provision accounts (centralized, handles idempotency and mapping)
-      const provisionResult =
-        await AccountManagerService.provisionMerchantAccounts(merchantId);
-
-      const { isErr } = await import("@/utils/result");
-      if (isErr(provisionResult)) {
-        throw new Error(provisionResult.error.message);
-      }
-
-      resultMetadata = provisionResult.value;
 
       // 2. Update Merchant Flags
       const updates: any = {};

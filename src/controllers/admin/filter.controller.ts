@@ -6,7 +6,6 @@ import { ProviderModel } from "@/models/provider.model";
 import { LegalEntityModel } from "@/models/legal-entity.model";
 import {
     TransactionType,
-    TransactionEntityType,
 } from "@/constants/transaction.constant";
 import { TransactionStatus } from "@/models/transaction.model";
 
@@ -29,10 +28,6 @@ export class FilterController {
             id: s,
             name: s,
         }));
-        const entityTypes = Object.values(TransactionEntityType).map((e) => ({
-            id: e,
-            name: e,
-        }));
 
         return respond(
             c,
@@ -52,7 +47,6 @@ export class FilterController {
                 })),
                 transactionTypes,
                 transactionStatuses,
-                entityTypes,
             })
         );
     }

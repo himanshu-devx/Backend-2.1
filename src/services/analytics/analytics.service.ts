@@ -1,12 +1,8 @@
 import {
   TransactionModel,
-  TransactionStatus,
 } from "@/models/transaction.model";
-import { TransactionType } from "@/constants/transaction.constant";
 import { getISTDate } from "@/utils/date.util";
-import { LedgerAccountModel } from "@/models/ledger-account.model";
-import { ACCOUNT_TYPE } from "@/constants/tigerbeetle.constant";
-import { paisaToRupee } from "@/utils/currency.util";
+
 
 export interface AnalyticsStats {
   total: number;
@@ -50,6 +46,8 @@ export class AnalyticsService {
       merchantIds?: string[];
       providerIds?: string[];
       legalEntityIds?: string[];
+      startDate?: Date;
+      endDate?: Date;
     }
   ) {
     const timeUnit = filters.timeFrame === "hourly" ? "hour" : "day";
@@ -395,8 +393,6 @@ export class AnalyticsService {
     const result = await TransactionModel.aggregate(pipeline);
     const data = result[0] || {};
 
-    // Fetch Real-time Ledger Balances
-    const ledgerBalances = await this.getAggregateBalances(filters.merchantIds);
 
     // Default stats structure
     const defaultStats = {
@@ -417,8 +413,8 @@ export class AnalyticsService {
     const payinStats = data.payinOverview?.[0] || defaultStats;
     const payoutStats = data.payoutOverview?.[0] || defaultStats;
 
-    payinStats.balance = ledgerBalances.payin;
-    payoutStats.balance = ledgerBalances.payout;
+    payinStats.balance = "0";
+    payoutStats.balance = "0";
 
     return {
       payin: payinStats,
@@ -427,61 +423,4 @@ export class AnalyticsService {
     };
   }
 
-  /**
-   * Helper to aggregate Ledger Balances for Merchants (Payin & Payout)
-   * Fetches real-time balances from TigerBeetle.
-   */
-  private static async getAggregateBalances(merchantIds?: string[]): Promise<{ payin: number; payout: number }> {
-    const filter: any = {
-      typeSlug: { $in: [ACCOUNT_TYPE.MERCHANT_PAYIN.slug, ACCOUNT_TYPE.MERCHANT_PAYOUT.slug] },
-      ownerType: "MERCHANT", // Only fetch Merchant accounts
-    };
-
-    if (merchantIds && merchantIds.length > 0) {
-      filter.ownerId = { $in: merchantIds };
-    }
-
-    // 1. Get Accounts from Mongo
-    const accounts = await LedgerAccountModel.find(filter).select("accountId typeSlug").lean();
-    if (!accounts.length) return { payin: 0, payout: 0 };
-
-    // 2. Fetch Balances from TigerBeetle
-    const { LedgerService } = await import("@/services/ledger/ledger.service");
-    const accountIds = accounts.map((a) => BigInt(a.accountId));
-
-    let balances: any[] = [];
-    try {
-      balances = await LedgerService.getBalances(accountIds);
-    } catch (e) {
-      console.error("Failed to fetch aggregate balances from TB", e);
-      return { payin: 0, payout: 0 };
-    }
-
-    let payinTotal = 0n;
-    let payoutTotal = 0n;
-
-    // 3. Sum up Balances
-    balances.forEach((b) => {
-      const acc = accounts.find((a) => BigInt(a.accountId) === b.id);
-      if (!acc) return;
-
-      // LIABILITY Account Logic: Credits - Debits
-      // Merchant accounts are Liabilities (Funds belonging to Merchant held by System)
-      const credits = BigInt(b.credits_posted || 0);
-      const debits = BigInt(b.debits_posted || 0);
-
-      const balance = credits - debits;
-
-      if (acc.typeSlug === ACCOUNT_TYPE.MERCHANT_PAYIN.slug) {
-        payinTotal += balance;
-      } else if (acc.typeSlug === ACCOUNT_TYPE.MERCHANT_PAYOUT.slug) {
-        payoutTotal += balance;
-      }
-    });
-
-    return {
-      payin: Math.round(Number(paisaToRupee(payinTotal)) * 100) / 100,
-      payout: Math.round(Number(paisaToRupee(payoutTotal)) * 100) / 100
-    };
-  }
 }

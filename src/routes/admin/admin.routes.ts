@@ -70,11 +70,6 @@ adminManageRoutes.get(
   handler(AdminController.getDashboardStats)
 );
 
-adminManageRoutes.get(
-  "/analytics/distribution",
-  authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),
-  handler(AdminController.getAnalyticsDistribution)
-);
 
 // --- Transaction View (Admin Side) ---
 

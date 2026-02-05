@@ -52,16 +52,11 @@ export class LegalEntityService {
 
       // --- AUTOMATED PROVISIONING ---
       try {
-        const { AccountManagerService } = await import(
-          "@/services/ledger/account-manager.service"
-        );
-        const provisionResult =
-          await AccountManagerService.provisionLegalEntityAccount(data.id!);
-        if (!provisionResult.ok) throw provisionResult.error;
+
       } catch (error: any) {
         return err(
           BadRequest(
-            `Failed to provision TigerBeetle account: ${error.message || "Unknown error"
+            `Failed to provision ledger account: ${error.message || "Unknown error"
             }`
           )
         );
@@ -112,8 +107,6 @@ export class LegalEntityService {
     if (result.data.length > 0) {
       try {
         const ids = result.data.map(le => le.id);
-        const { AccountManagerService } = await import("@/services/ledger/account-manager.service");
-        const accountMap = await AccountManagerService.getAccountsForOwners(ids, "LEGAL_ENTITY");
 
         // We need to attach this to the results.
         // result.data are Mongoose documents. To attach arbitrary fields, we might need to rely on .toJSON() or lean() if repo returned lean.
@@ -121,12 +114,6 @@ export class LegalEntityService {
         // Let's try to set it dynamically. If strict TS checks fail on Document type, we might need `any`.
         result.data = result.data.map((doc) => {
           const json = doc.toObject ? doc.toObject() : doc; // Ensure POJO
-          const accounts = accountMap.get(json.id);
-          if (accounts && accounts.main) {
-            (json as any).mainAccount = accounts.main;
-          } else {
-            (json as any).mainAccount = null;
-          }
           // Return simplified object with mainAccount
           return {
             id: json.id,
@@ -154,20 +141,6 @@ export class LegalEntityService {
     if (!le) return err(NotFound("Legal Entity not found"));
 
     const leObj = le.toObject ? le.toObject() : (le as any);
-
-    try {
-      const { AccountManagerService } = await import("@/services/ledger/account-manager.service");
-      const accountMap = await AccountManagerService.getAccountsForOwners([id], "LEGAL_ENTITY");
-      const accounts = accountMap.get(id);
-
-      if (accounts && accounts.main) {
-        (leObj as any).mainAccount = accounts.main;
-      } else {
-        (leObj as any).mainAccount = null;
-      }
-    } catch (e) {
-      console.error("Failed to enrich LE details:", e);
-    }
 
     return ok(leObj);
   }
@@ -221,31 +194,4 @@ export class LegalEntityService {
     return ok(updated);
   }
 
-  static async onboard(
-    id: string
-  ): Promise<Result<LegalEntityDocument, HttpError>> {
-    const le = await legalEntityRepository.findOne({ id: id });
-    if (!le) return err(NotFound("Legal Entity not found"));
-
-    try {
-      const { AccountManagerService } = await import(
-        "@/services/ledger/account-manager.service"
-      );
-      const result = await AccountManagerService.provisionLegalEntityAccount(
-        id
-      );
-      if (!result.ok) throw result.error;
-
-      le.isOnboard = true;
-      await le.save();
-
-      return ok(le);
-    } catch (e: any) {
-      return err(
-        BadRequest(
-          `Failed to provision accounts: ${e.message || "Unknown error"}`
-        )
-      );
-    }
-  }
 }

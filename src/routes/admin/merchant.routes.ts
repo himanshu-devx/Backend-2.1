@@ -138,7 +138,6 @@ adminMerchantsRoutes.put(
     ADMIN_ROLES.ADMIN,
     ADMIN_ROLES.TECHNICAL,
   ]),
-  // validateBody(UpdateRoutingSchema), // Need to import schema
   handler(MerchantManagementController.updateRouting)
 );
 

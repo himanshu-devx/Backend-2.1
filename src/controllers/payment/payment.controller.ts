@@ -4,8 +4,6 @@ import {
   paymentService,
 } from "@/services/payment/payment.service";
 import { AppError, InternalError, BadRequest, Conflict } from "@/utils/error";
-import { InitiatePayinDto } from "@/dto/payment/payin.dto";
-import { InitiatePayoutDto } from "@/dto/payment/payout.dto";
 import { AuditLogService } from "@/services/common/audit-log.service";
 
 export class PaymentController {

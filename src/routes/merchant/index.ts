@@ -5,7 +5,6 @@ import { handler } from "@/utils/handler";
 import {
   MerchantSelfController,
   LoginHistoryController,
-  BalanceController,
 } from "@/controllers";
 import { MERCHANT_ROLES } from "@/constants/users.constant";
 import { panelIpWhitelistMiddleware } from "@/middlewares/panel-ip-whitelist.middleware";
@@ -40,29 +39,11 @@ merchantRoutes.get(
   handler(MerchantSelfController.getOwnPayinConfig)
 );
 
-// merchantRoutes.get(
-//   "/profile/payin-fees",
-//   authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-//   handler(MerchantSelfController.getOwnPayinFees) // Assuming this existed or we use config? Config has fees.
-// );
-// The Service includes fees in Config. Let's stick to config endpoints unless frontend specifically calls /payin-fees.
-// Previous code had /profile/payin-fees. I'll check if I implemented separate fees getter in SelfService.
-// I implemented getOwnPayinConfig which returns { ...config, fees }.
-// So /profile/payin returns fees too.
-// If frontend needs explicit route, I'll direct it to config or re-add separate but it's redundant.
-// I'll leave it commented or remove, assuming Profile/Config is enough.
-
 merchantRoutes.get(
   "/profile/payout",
   authorizeRoles([MERCHANT_ROLES.MERCHANT]),
   handler(MerchantSelfController.getOwnPayoutConfig)
 );
-
-// merchantRoutes.get(
-//   "/profile/payout-fees",
-//   authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-//   handler(MerchantSelfController.getOwnPayoutFees)
-// );
 
 merchantRoutes.get(
   "/profile/api-keys",
@@ -76,13 +57,6 @@ merchantRoutes.get(
   handler(MerchantSelfController.getDashboardStats)
 );
 
-merchantRoutes.get(
-  "/balance",
-  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-  handler(BalanceController.getMerchantBalance)
-);
-
-// --- NEW Self-Service Actions ---
 
 merchantRoutes.put(
   "/config/callback-url",
@@ -102,22 +76,5 @@ merchantRoutes.put(
   handler(MerchantSelfController.updateProfile)
 );
 
-merchantRoutes.get(
-  "/ledger-accounts",
-  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-  handler(MerchantSelfController.getOwnLedgerAccounts)
-);
-
-merchantRoutes.get(
-  "/ledger-accounts/:accountId",
-  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-  handler(MerchantSelfController.getOwnLedgerAccountById)
-);
-
-merchantRoutes.get(
-  "/ledger-accounts/:accountId/transfers",
-  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-  handler(MerchantSelfController.getOwnAccountTransfers)
-);
 
 export default merchantRoutes;

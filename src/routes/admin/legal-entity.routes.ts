@@ -47,7 +47,7 @@ adminLegalEntityRoutes.use(
 
 adminLegalEntityRoutes.post(
   "/",
-  // validateBody(CreateLegalEntitySchema),
+  validateBody(CreateLegalEntitySchema),
   LegalEntityController.create
 );
 
@@ -60,7 +60,5 @@ adminLegalEntityRoutes.put(
   validateBody(UpdateLegalEntitySchema),
   LegalEntityController.update
 );
-
-adminLegalEntityRoutes.post("/:id/onboard", LegalEntityController.onboard);
 
 export default adminLegalEntityRoutes;

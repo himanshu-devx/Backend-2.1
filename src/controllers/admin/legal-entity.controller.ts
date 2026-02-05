@@ -75,9 +75,4 @@ export class LegalEntityController {
     return handleResult(c, result);
   }
 
-  static async onboard(c: Context) {
-    const id = c.req.param("id");
-    const result = await LegalEntityService.onboard(id);
-    return handleResult(c, result);
-  }
 }

@@ -71,8 +71,7 @@ export class WebhookController {
         transaction.utr = result.utr || transaction.utr;
 
         if (result.status === "SUCCESS") {
-            // Success: Post (Commit) TigerBeetle transfer
-            await payoutService.postPayoutTransfer(transaction);
+            // Success: Post (Commit) ledger transfer
             transaction.status = TransactionStatus.SUCCESS;
 
             transaction.events.push({
@@ -81,8 +80,7 @@ export class WebhookController {
                 payload: result
             });
         } else if (result.status === "FAILED") {
-            // Failed: Void TigerBeetle transfer
-            await payoutService.voidPayoutTransfer(transaction);
+            // Failed: Void ledger transfer
             transaction.status = TransactionStatus.FAILED;
             transaction.meta.set("error", result.message || "Payout failed via webhook");
 
@@ -97,7 +95,7 @@ export class WebhookController {
     }
 
     private async handlePayinUpdate(transaction: any, result: any) {
-        // For Payin, we usually don't have a pending TB transfer during initialization
+        // For Payin, we usually don't have a pending ledger transfer during initialization
         // The money movement happens here in the webhook
 
         transaction.providerRef = result.providerTransactionId || transaction.providerRef;
@@ -108,7 +106,7 @@ export class WebhookController {
             // For AlphaPay payin, we typically execute money movement after webhook
 
             // Let's assume PayinService handles the ledger part elsewhere or we call it here
-            // But based on user request "webhook success then post tiger bettle traction and store utr"
+            // But based on user request "webhook success then post ledger transaction and store UTR"
             // it seems they primarily care about Payout flow for now, but suggested webhooks in general.
 
             transaction.status = TransactionStatus.SUCCESS;

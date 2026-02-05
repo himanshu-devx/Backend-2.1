@@ -10,13 +10,16 @@ const schema = z.object({
   MONGODB_URI: z.string().startsWith("mongodb"),
   MONGO_DB_NAME: z.string().min(1),
   API_PORT: z.coerce.number().default(4000),
-  WORKER_TZ: z.string().default("UTC"),
   OTLP_HTTP_URL: z.string().url().optional(),
   FRONTEND_URL: z.string().url().optional(),
 
-  // TigerBeetle
-  TIGERBEETLE_CLUSTER_ID: z.coerce.number().default(0),
-  TIGERBEETLE_REPLICA_ADDRESSES: z.string().default("3000"), // Comma separated
+  // Postgres
+  POSTGRES_HOST: z.string().default("localhost"),
+  POSTGRES_PORT: z.string().default("5435"),
+  POSTGRES_USER: z.string().default("postgres"),
+  POSTGRES_PASSWORD: z.string().default("password"),
+  POSTGRES_DB: z.string().default("wisipay_ledger"),
+  POSTGRES_POOL_MAX: z.string().default("20"),
 
   SMTP_HOST: z.string().min(1),
   SMTP_PORT: z.coerce.number().default(587),
@@ -29,20 +32,6 @@ const schema = z.object({
 
   SMTP_USER: z.string().min(1),
   SMTP_PASS: z.string().min(1),
-
-  // Zoho Mail API
-  ZOHO_CLIENT_ID: z.string().optional(),
-  ZOHO_CLIENT_SECRET: z.string().optional(),
-  ZOHO_REFRESH_TOKEN: z.string().optional(),
-  ZOHO_FROM_EMAIL: z.string().optional(),
-  ZOHO_ACCOUNT_ID: z.string().optional(),
-  // SendGrid Name
-  SENDGRID_API_KEY: z.string().optional(),
-  SENDGRID_FROM_EMAIL: z.string().optional(),
-  ZOHO_OAUTH_DOMAIN: z.string().default("https://accounts.zoho.in"),
-  ZOHO_MAIL_API_URL: z.string().url().default("https://mail.zoho.in/api/accounts"),
-  // Zoho Mail API (Deprecated but kept for rollback)
-  ZOHO_API_DOMAIN: z.string().default("https://mail.zoho.in"),
 
   APP_BRAND_NAME: z.string().default("Fintech App"),
   APP_BRAND_PREFIX: z.string().optional(),
@@ -73,27 +62,19 @@ export const ENV: Env = schema.parse({
   OTLP_HTTP_URL: process.env.OTLP_HTTP_URL,
   FRONTEND_URL: process.env.FRONTEND_URL,
 
-  TIGERBEETLE_CLUSTER_ID: process.env.TIGERBEETLE_CLUSTER_ID,
-  TIGERBEETLE_REPLICA_ADDRESSES: process.env.TIGERBEETLE_REPLICA_ADDRESSES,
+  // Postgres
+  POSTGRES_HOST: process.env.POSTGRES_HOST,
+  POSTGRES_PORT: process.env.POSTGRES_PORT,
+  POSTGRES_USER: process.env.POSTGRES_USER,
+  POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,
+  POSTGRES_DB: process.env.POSTGRES_DB,
+  POSTGRES_POOL_MAX: process.env.POSTGRES_POOL_MAX,
 
   SMTP_HOST: process.env.SMTP_HOST,
   SMTP_PORT: process.env.SMTP_PORT,
   SMTP_SECURE: process.env.SMTP_SECURE,
   SMTP_USER: process.env.SMTP_USER,
   SMTP_PASS: process.env.SMTP_PASS,
-
-  ZOHO_CLIENT_ID: process.env.ZOHO_CLIENT_ID,
-  ZOHO_CLIENT_SECRET: process.env.ZOHO_CLIENT_SECRET,
-  ZOHO_REFRESH_TOKEN: process.env.ZOHO_REFRESH_TOKEN,
-  ZOHO_FROM_EMAIL: process.env.ZOHO_FROM_EMAIL,
-  ZOHO_ACCOUNT_ID: process.env.ZOHO_ACCOUNT_ID,
-
-  SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
-  SENDGRID_FROM_EMAIL: process.env.SENDGRID_FROM_EMAIL,
-
-  ZOHO_OAUTH_DOMAIN: process.env.ZOHO_OAUTH_DOMAIN,
-  ZOHO_MAIL_API_URL: process.env.ZOHO_MAIL_API_URL,
-  ZOHO_API_DOMAIN: process.env.ZOHO_API_DOMAIN,
 
   APP_BRAND_NAME: process.env.APP_BRAND_NAME,
   APP_BASE_URL: process.env.APP_BASE_URL,

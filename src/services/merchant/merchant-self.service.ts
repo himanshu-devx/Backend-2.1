@@ -9,6 +9,7 @@ import { MerchantManagementService } from "../admin/merchant-management.service"
 import argon2 from "argon2";
 import crypto from "crypto";
 import { getISTDate } from "@/utils/date.util";
+import type { AnalyticsFilters } from "@/services/analytics/analytics.service";
 
 export class MerchantSelfService {
   // Use MerchantManagementService for read operations to avoid code duplication
@@ -248,7 +249,13 @@ export class MerchantSelfService {
     const { AnalyticsService } = await import(
       "@/services/analytics/analytics.service"
     );
-    const analytics = await AnalyticsService.getMerchantAnalytics(merchantId, params);
+    const filters: AnalyticsFilters = {
+      merchantId,
+      startDate: params.startDate,
+      endDate: params.endDate,
+    };
+
+    const analytics = await AnalyticsService.getDetailedDashboardStats(filters);
 
     // 3. Cache the result for 60 seconds (short-lived for dashboard)
     await redis.setex(cacheKey, 60, JSON.stringify(analytics));

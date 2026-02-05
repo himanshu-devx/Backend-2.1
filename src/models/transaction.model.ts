@@ -4,7 +4,6 @@ import { generateCustomId } from "@/utils/id.util";
 import { ENV } from "@/config/env";
 
 import {
-  TransactionEntityType,
   TransactionPartyType,
   TransactionType,
 } from "@/constants/transaction.constant";
@@ -34,7 +33,7 @@ export interface TransactionParty {
   name?: string;
   email?: string;
   phone?: string;
-  details?: any; // Generic details
+  [key: string]: any;
 }
 
 export interface TransactionEvent {
@@ -47,22 +46,13 @@ export interface TransactionEvent {
 export interface TransactionDocument extends Document {
   id: string; // TXN-{seq}
 
-  // Double Entry Ownership
-  sourceEntityId: string;
-  sourceEntityType: TransactionEntityType | string;
-
-  destinationEntityId: string;
-  destinationEntityType: TransactionEntityType | string;
-
   // Legacy/Specific ID references (Optional but kept for index/compatibility)
   merchantId?: string;
   providerId?: string;
   legalEntityId?: string;
   providerLegalEntityId?: string;
-
   type: TransactionType;
   status: TransactionStatus;
-
   amount: number;
   netAmount: number;
   currency: string;
@@ -107,36 +97,11 @@ const TransactionSchema = new Schema<TransactionDocument>(
       required: true,
       index: true,
     },
-    // Double Entry Ownership
-    sourceEntityId: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    sourceEntityType: {
-      type: String,
-      enum: Object.values(TransactionEntityType),
-      required: true,
-      index: true,
-    },
-    destinationEntityId: {
-      type: String,
-      required: true,
-      index: true,
-    },
-    destinationEntityType: {
-      type: String,
-      enum: Object.values(TransactionEntityType),
-      required: true,
-      index: true, // Index for destination lookups
-    },
-
     // Specific IDs (Optional)
     merchantId: { type: String, index: true },
     providerId: { type: String, index: true },
     legalEntityId: { type: String, index: true },
     providerLegalEntityId: { type: String, index: true },
-
     type: {
       type: String,
       enum: Object.values(TransactionType),
@@ -206,7 +171,6 @@ const TransactionSchema = new Schema<TransactionDocument>(
           name: String,
           email: String,
           phone: String,
-          details: Schema.Types.Mixed,
         },
         { _id: false }
       ),

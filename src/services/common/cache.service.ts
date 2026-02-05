@@ -1,6 +1,6 @@
 import { redis } from "@/infra/redis-instance";
 import { RedisKeys } from "@/constants/redis.constant";
-import { MerchantModel, MerchantDocument } from "@/models/merchant.model";
+import { MerchantModel } from "@/models/merchant.model";
 import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
 
 export class CacheService {
@@ -195,34 +195,5 @@ export class CacheService {
     await redis.del(RedisKeys.CHANNEL(providerId, legalEntityId));
   }
 
-  /**
-   * Get Ledger Account from cache or DB
-   */
-  static async getLedgerAccount(
-    ownerId: string,
-    typeSlug: string
-  ): Promise<any> {
-    const key = RedisKeys.LEDGER_ACCOUNT(ownerId, typeSlug);
-    const cached = await redis.get(key);
-    if (cached) return JSON.parse(cached);
-
-    const { LedgerAccountModel } = await import("@/models/ledger-account.model");
-    const account = await LedgerAccountModel.findOne({
-      ownerId,
-      typeSlug,
-    });
-
-    if (!account) return null;
-
-    const aData = account.toJSON();
-    await redis.setex(key, this.TTL, JSON.stringify(aData));
-    return aData;
-  }
-
-  /**
-   * Invalidate Ledger Account Cache
-   */
-  static async invalidateLedgerAccount(ownerId: string, typeSlug: string) {
-    await redis.del(RedisKeys.LEDGER_ACCOUNT(ownerId, typeSlug));
-  }
+  // Ledger account cache removed (ledger-only mode)
 }
