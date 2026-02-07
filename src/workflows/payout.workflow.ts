@@ -6,7 +6,7 @@ import { Forbidden } from "@/utils/error";
 import { getISTDate } from "@/utils/date.util";
 import { ProviderFactory } from "@/providers/provider-factory";
 import { CacheService } from "@/services/common/cache.service";
-import { PaymentLedgerService } from "./payment-ledger.service";
+import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { LedgerService } from "@/services/ledger/ledger.service";
 import { LedgerUtils } from "@/utils/ledger.utils";
 import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
@@ -86,7 +86,7 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
         try {
             // LEDGER HOLD
             const sourceId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, this.merchant.id, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYIN);
-            const destinationId = LedgerUtils.generateAccountId(ENTITY_TYPE.PROVIDER, this.transaction.providerLegalEntityId!, AccountType.ASSET, ENTITY_ACCOUNT_TYPE.PAYIN);
+            const destinationId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, this.merchant.id, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.HOLD);
 
             const holdEntryId = await LedgerService.transfer({
                 narration: `Payout: ${this.transaction.orderId}`,

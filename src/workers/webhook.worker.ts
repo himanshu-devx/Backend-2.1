@@ -52,7 +52,11 @@ async function startWorker() {
 }
 
 // Start the worker if this file is run directly
-const isMain = import.meta.path === process.argv[1] || require.main === module;
+const isMain = (() => {
+    if (!process.argv[1]) return false;
+    const entryUrl = new URL(`file://${process.argv[1]}`).href;
+    return entryUrl === import.meta.url;
+})();
 
 if (isMain) {
     startWorker();

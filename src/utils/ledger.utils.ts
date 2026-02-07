@@ -50,10 +50,12 @@ export class LedgerUtils {
     static generateAccountCode(
         entityType: LedgerAccountEntity | string,
         name: string,
+        entityId: string,
         purpose: LedgerAccountPurpose | string,
     ): string {
-        const safeName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_')
-        return `${entityType}:${safeName}:${purpose}`;
+        const safeName = name.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        const safeEntityId = entityId.toUpperCase().replace(/[^A-Z0-9]/g, '_');
+        return `${entityType}:${safeName}:${safeEntityId}:${purpose}`;
     }
 
     /**
@@ -87,14 +89,25 @@ export class LedgerUtils {
     static parseAccountCode(code: string): {
         entityType: string;
         name: string;
+        entityId?: string;
         purpose: string;
     } | null {
         const parts = code.split(':');
         if (parts.length < 3) return null;
 
-        // Format: {ENTITY}:{NAME}:{PURPOSE}
-        const [entityType, name, ...purposeParts] = parts;
+        if (parts.length >= 4) {
+            // Format: {ENTITY}:{NAME}:{ENTITY_ID}:{PURPOSE}
+            const [entityType, name, entityId, ...purposeParts] = parts;
+            return {
+                entityType,
+                name,
+                entityId,
+                purpose: purposeParts.join(':')
+            };
+        }
 
+        // Legacy Format: {ENTITY}:{NAME}:{PURPOSE}
+        const [entityType, name, ...purposeParts] = parts;
         return {
             entityType,
             name,

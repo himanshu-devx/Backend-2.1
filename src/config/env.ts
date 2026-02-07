@@ -37,6 +37,7 @@ const schema = z.object({
   APP_BRAND_PREFIX: z.string().optional(),
   APP_BASE_URL: z.string().url().optional(),
   JWT_SECRET: z.string().min(1),
+  API_SECRET_ENC_KEY: z.string().optional(),
   REDIS_URL: z.string().url().optional(),
   SUPER_ADMIN_IPS: z.string().optional(),
 
@@ -93,6 +94,7 @@ export const ENV: Env = schema.parse({
   APP_BRAND_NAME: process.env.APP_BRAND_NAME,
   APP_BASE_URL: process.env.APP_BASE_URL,
   JWT_SECRET: process.env.JWT_SECRET,
+  API_SECRET_ENC_KEY: process.env.API_SECRET_ENC_KEY,
   REDIS_URL: process.env.REDIS_URL,
   SUPER_ADMIN_IPS: process.env.SUPER_ADMIN_IPS,
   SUPER_ADMIN_PANEL_IP_WHITELIST_ENABLED:

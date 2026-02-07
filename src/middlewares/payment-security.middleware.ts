@@ -4,6 +4,7 @@ import { CacheService } from "@/services/common/cache.service";
 import { Forbidden, Unauthorized, BadRequest } from "@/utils/error";
 import { logger } from "@/infra/logger-instance";
 import crypto from "crypto";
+import { decryptSecret, looksLikeArgon2Hash } from "@/utils/secret.util";
 
 export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): MiddlewareHandler => async (c: Context, next: Next) => {
 
@@ -32,7 +33,10 @@ export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): 
         }
     }
 
-    const signature = (c.req.header("x-signature") || body["hash"] || "") as string;
+    let signature = (c.req.header("x-signature") || body["hash"] || "") as string;
+    if (signature && signature.startsWith("sha256=")) {
+        signature = signature.slice("sha256=".length);
+    }
 
     if (!merchantId) throw BadRequest("Missing x-merchant-id");
     if (!timestampStr) throw BadRequest("Missing x-timestamp");
@@ -61,6 +65,9 @@ export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): 
 
     if (!merchant.status) throw Forbidden("Merchant is not active");
     if (!merchant.isOnboard) throw Forbidden("Merchant is not onboarded");
+    if (merchant.apiSecretEnabled === false) {
+        throw Forbidden("API keys are disabled for this merchant");
+    }
 
     // 4. IP Validation
     const clientIp = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || c.env?.remoteAddr || "127.0.0.1";
@@ -90,24 +97,39 @@ export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): 
     }
 
     // 5. Signature Verification
-    const apiSecret = merchant.apiSecretEncrypted;
+    const apiSecretEncrypted = merchant.apiSecretEncrypted;
 
-    if (!apiSecret) {
+    if (!apiSecretEncrypted) {
         logger.error(`[PaymentSecurity] Merchant ${merchantId} has no API Secret`);
-        // TEMPORARY DEBUGGING
-        throw Forbidden(`Merchant configuration error: Secret missing. Keys: ${Object.keys(merchant).join(",")}`);
+        throw Forbidden("Merchant configuration error: Secret missing");
+    }
+
+    const apiSecret = decryptSecret(apiSecretEncrypted);
+    if (!apiSecret) {
+        if (looksLikeArgon2Hash(apiSecretEncrypted)) {
+            logger.warn(`[PaymentSecurity] Merchant ${merchantId} has legacy API secret hash; rotation required`);
+        } else {
+            logger.warn(`[PaymentSecurity] Merchant ${merchantId} API secret decryption failed`);
+        }
+        throw Forbidden("Invalid API credentials. Please rotate API keys.");
     }
 
     let isValid = false;
+    const safeEqual = (a: string, b: string) => {
+        const aBuf = Buffer.from(a);
+        const bBuf = Buffer.from(b);
+        if (aBuf.length !== bBuf.length) return false;
+        return crypto.timingSafeEqual(aBuf, bBuf);
+    };
 
     // A. Check x-signature (New Standard: Body + Timeline)
-    if (signature && signature.length >= 64) {
+    if (signature && signature.length === 64) {
         // We expect maybe a different format or just the hex.
         // Let's standardise: HMAC-SHA256( rawBody + "|" + timestamp, secret )
         const payloadString = rawBody + "|" + timestamp;
         const computed = crypto.createHmac("sha256", apiSecret).update(payloadString).digest("hex");
 
-        if (crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature))) {
+        if (safeEqual(computed, signature)) {
             isValid = true;
         } else {
             logger.warn(`[PaymentSecurity] Invalid x-signature for ${merchantId}`);
@@ -121,7 +143,7 @@ export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): 
         const dataString = `${amount}|${currency}|${orderId}|${apiSecret}`;
         const computedLegacy = crypto.createHmac("sha256", apiSecret).update(dataString).digest("hex");
 
-        if (crypto.timingSafeEqual(Buffer.from(computedLegacy), Buffer.from(body.hash))) {
+        if (safeEqual(computedLegacy, String(body.hash))) {
             isValid = true;
         } else {
             logger.warn(`[PaymentSecurity] Invalid legacy hash for ${merchantId}`);

@@ -13,10 +13,10 @@ import { ProviderModel } from "@/models/provider.model";
 import { LegalEntityModel } from "@/models/legal-entity.model";
 import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
 import { MerchantDocument } from "@/models/merchant.model";
-import argon2 from "argon2";
 import crypto from "crypto";
 import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { TransactionType } from "@/constants/transaction.constant";
+import { encryptSecret } from "@/utils/secret.util";
 
 export class MerchantManagementService {
   static async getMerchantList(
@@ -534,10 +534,8 @@ export class MerchantManagementService {
 
     const newSecret = "sk_" + crypto.randomBytes(24).toString("hex");
 
-    const hashedSecret = await argon2.hash(newSecret);
-
     const updatedMerchant = await merchantRepository.update(merchantId, {
-      apiSecretEncrypted: hashedSecret,
+      apiSecretEncrypted: encryptSecret(newSecret),
       apiSecretUpdatedAt: getISTDate(),
       apiSecretEnabled: true,
     } as any);

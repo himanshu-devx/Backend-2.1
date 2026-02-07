@@ -68,17 +68,22 @@ export class AccountService {
         const code = LedgerUtils.generateAccountCode(
             params.entityType,
             params.name,
+            params.entityId,
             params.purpose
         );
 
-        await LedgerService.createAccount({
-            id,
-            code,
-            type,
-            status: AccountStatus.ACTIVE,
-            allowOverdraft: params.allowOverdraft,
-            actorId: params.actorId,
-        });
+        // Idempotent create: if account already exists, reuse it
+        const existing = await LedgerService.getAccountById(id).catch(() => null);
+        if (!existing) {
+            await LedgerService.createAccount({
+                id,
+                code,
+                type,
+                status: AccountStatus.ACTIVE,
+                allowOverdraft: params.allowOverdraft,
+                actorId: params.actorId,
+            });
+        }
 
         return id;
     }

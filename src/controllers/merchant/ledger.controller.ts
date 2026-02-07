@@ -59,7 +59,9 @@ export const getMyLedgerEntry = async (c: Context) => {
             return c.json({ success: false, message: 'Ledger entry not found' }, 404);
         }
 
-        const merchantOwnsEntry = entry.lines?.some((line: any) => line.accountId.startsWith(`MERCHANT:${merchantId}:`));
+        const merchantOwnsEntry = entry.lines?.some((line: any) =>
+            typeof line.accountId === "string" && line.accountId.includes(`:MERCHANT:${merchantId}:`)
+        );
         if (!merchantOwnsEntry) {
             return c.json({ success: false, message: 'You do not have access to this entry' }, 403);
         }

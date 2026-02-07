@@ -108,7 +108,7 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
             customerName: dto.customerName,
             customerEmail: dto.customerEmail,
             customerPhone: dto.customerPhone,
-            callbackUrl: `${ENV.APP_BASE_URL || "http://localhost:4000"}/api/webhook/payin/${this.routing.providerId}/${this.routing.legalEntityId}`,
+            callbackUrl: `${ENV.APP_BASE_URL || "http://localhost:4000"}/webhook/payin/${this.routing.providerId}/${this.routing.legalEntityId}`,
             redirectUrl: dto.redirectUrl,
             remarks: dto.remarks || "Payin",
             company: this.merchant.id

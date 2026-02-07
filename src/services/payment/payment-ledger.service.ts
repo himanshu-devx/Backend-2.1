@@ -26,23 +26,27 @@ export class PaymentLedgerService {
 
         const platformIncomeId = LedgerUtils.generateAccountId(
             ENTITY_TYPE.INCOME,
-            "PLATFORM",
+            "INCOME",
             AccountType.INCOME,
-            "FEES"
+            ENTITY_ACCOUNT_TYPE.INCOME
         );
 
         const merchantFees = transaction.fees?.merchantFees;
         if (!merchantFees) throw new Error("Merchant fees not found");
+
+        const credits = [
+            { accountId: merchantPayinAccountId, amount: transaction.netAmount as any }
+        ];
+        if (Number(merchantFees.total) > 0) {
+            credits.push({ accountId: platformIncomeId, amount: merchantFees.total as any });
+        }
 
         return LedgerService.transfer({
             narration: `Payin Success: ${transaction.orderId}`,
             externalRef: transaction.id,
             valueDate: getISTDate(),
             debits: [{ accountId: providerSettlementId, amount: transaction.amount as any }],
-            credits: [
-                { accountId: merchantPayinAccountId, amount: transaction.netAmount as any },
-                { accountId: platformIncomeId, amount: merchantFees.total as any }
-            ],
+            credits,
             status: "POSTED"
         });
     }

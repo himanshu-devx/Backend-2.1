@@ -6,10 +6,10 @@ import { AuditContext } from "@/utils/audit.util";
 import { redis } from "@/infra/redis-instance";
 import { RedisKeys } from "@/constants/redis.constant";
 import { MerchantManagementService } from "../admin/merchant-management.service";
-import argon2 from "argon2";
 import crypto from "crypto";
 import { getISTDate } from "@/utils/date.util";
 import type { AnalyticsFilters } from "@/services/analytics/analytics.service";
+import { encryptSecret } from "@/utils/secret.util";
 
 export class MerchantSelfService {
   // Use MerchantManagementService for read operations to avoid code duplication
@@ -165,10 +165,8 @@ export class MerchantSelfService {
     if (!merchant) return err(NotFound("Merchant not found"));
 
     const newSecret = "sk_" + crypto.randomBytes(24).toString("hex");
-    const hashedSecret = await argon2.hash(newSecret);
-
     const updatedMerchant = await merchantRepository.update(merchantId, {
-      apiSecretEncrypted: hashedSecret,
+      apiSecretEncrypted: encryptSecret(newSecret),
       apiSecretUpdatedAt: getISTDate(),
       apiSecretEnabled: true,
     } as any);

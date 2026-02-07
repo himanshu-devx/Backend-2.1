@@ -3,7 +3,7 @@ import { ProviderFactory } from "@/providers/provider-factory";
 import { CacheService } from "@/services/common/cache.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
-import { PaymentLedgerService } from "./payment-ledger.service";
+import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import axios from "axios";
 
 export class WebhookWorkflow {
