@@ -19,4 +19,4 @@ COPY libs ./libs
 RUN npm run build
 RUN npm prune --omit=dev
 
-CMD ["sh", "-c", "node dist/${SERVICE}.js"]
+CMD ["sh", "-c", "node dist/src/${SERVICE}.js"]

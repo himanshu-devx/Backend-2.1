@@ -46,7 +46,7 @@ services:
       context: ../../
       dockerfile: Dockerfile
     environment:
-      SERVICE: instances/worker
+      SERVICE: workers/webhook.worker
     env_file: ./.env
     restart: unless-stopped
     networks: [ app_net ]
