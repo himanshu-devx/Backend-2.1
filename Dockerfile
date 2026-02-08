@@ -1,7 +1,11 @@
+# -------- BUILD STAGE (Bun) --------
 FROM oven/bun:1.1.36 AS builder
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y python3 make g++ \
+RUN apt-get update && apt-get install -y \
+  python3 \
+  make \
+  g++ \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json bunfig.toml tsconfig.json ./
@@ -12,21 +16,18 @@ COPY src ./src
 RUN bun run build:all
 
 
-# 👇 NEW RUNTIME (glibc 2.34+)
-FROM debian:12-slim
-
-# Install bun runtime
-RUN apt-get update && apt-get install -y curl ca-certificates \
-  && curl -fsSL https://bun.sh/install | bash \
-  && ln -s /root/.bun/bin/bun /usr/local/bin/bun \
-  && rm -rf /var/lib/apt/lists/*
+# -------- RUNTIME STAGE (Node) --------
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 ENV NODE_ENV=production
 ENV SERVICE=api
 
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /root/.bun /root/.bun
-COPY package.json ./
+# Install only prod deps (argon2 etc.)
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev
 
-CMD ["sh", "-c", "bun ./dist/${SERVICE}.js"]
+# Copy compiled JS
+COPY --from=builder /app/dist ./dist
+
+CMD ["sh", "-c", "node dist/${SERVICE}.js"]
