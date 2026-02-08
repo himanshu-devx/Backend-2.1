@@ -39,7 +39,7 @@ export class TrialBalance {
       values: [],
     });
 
-    return res.rows.map((row) => {
+    return res.rows.map((row: any) => {
       const type = row.type as AccountType;
       const rawDebitTotal = BigInt(row.debit_total);
       const rawCreditTotal = BigInt(row.credit_total);

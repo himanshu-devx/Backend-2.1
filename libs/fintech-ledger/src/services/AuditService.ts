@@ -122,7 +122,7 @@ export class AuditService {
              LIMIT $1 OFFSET $2`,
             [limit, offset]
         );
-        return res.rows.map((r) => ({
+        return res.rows.map((r: any) => ({
             id: r.id,
             action: r.action,
             targetId: r.target_id,
@@ -141,7 +141,7 @@ export class AuditService {
              LIMIT $2 OFFSET $3`,
             [targetId, limit, offset]
         );
-        return res.rows.map((r) => ({
+        return res.rows.map((r: any) => ({
             id: r.id,
             action: r.action,
             targetId: r.target_id,
@@ -160,7 +160,7 @@ export class AuditService {
              LIMIT $2 OFFSET $3`,
             [actorId, limit, offset]
         );
-        return res.rows.map((r) => ({
+        return res.rows.map((r: any) => ({
             id: r.id,
             action: r.action,
             targetId: r.target_id,

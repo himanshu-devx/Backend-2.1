@@ -38,7 +38,7 @@ export class AccountStatement {
       values: [accountId, limit],
     });
 
-    return res.rows.map((row) => {
+    return res.rows.map((row: any) => {
       const type = row.type as AccountType;
       const rawAmount = BigInt(row.amount);
       const rawBalanceAfter = BigInt(row.balance_after);

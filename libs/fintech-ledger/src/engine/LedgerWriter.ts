@@ -41,7 +41,7 @@ export class LedgerWriter {
     });
 
     if (accountsRes.rowCount !== accountIds.length) {
-      const found = new Set(accountsRes.rows.map((r) => r.id));
+      const found = new Set(accountsRes.rows.map((r: any) => r.id));
       const missing = accountIds.find((id) => !found.has(id));
       throw new AccountNotFoundError(missing || 'Unknown');
     }

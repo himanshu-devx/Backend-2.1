@@ -424,7 +424,7 @@ export class PostingEngine {
       postedAt: r.posted_at ? new Date(r.posted_at) : null,
       createdAt: new Date(r.created_at),
       status: r.status,
-      lines: lRes.rows.map(l => ({
+      lines: lRes.rows.map((l: any) => ({
         accountId: l.account_id,
         amount: BigInt(l.amount)
       })),
@@ -452,7 +452,7 @@ export class PostingEngine {
         postedAt: r.posted_at ? new Date(r.posted_at) : null,
         createdAt: new Date(r.created_at),
         status: r.status,
-        lines: lRes.rows.map(l => ({
+        lines: lRes.rows.map((l: any) => ({
           accountId: l.account_id,
           amount: BigInt(l.amount)
         })),
@@ -581,7 +581,7 @@ export class PostingEngine {
 
   async getAllAccounts(): Promise<Account[]> {
     const res = await this.pool.query('SELECT * FROM accounts ORDER BY code');
-    return res.rows.map(r => ({
+    return res.rows.map((r: any) => ({
       id: r.id,
       code: r.code,
       type: r.type,
@@ -616,7 +616,7 @@ export class PostingEngine {
   async getAccounts(ids: string[]): Promise<Account[]> {
     if (ids.length === 0) return [];
     const res = await this.pool.query('SELECT * FROM accounts WHERE id = ANY($1::text[])', [ids]);
-    return res.rows.map(r => ({
+    return res.rows.map((r: any) => ({
       id: r.id,
       code: r.code,
       type: r.type,
@@ -633,7 +633,7 @@ export class PostingEngine {
   async searchAccounts(pattern: string): Promise<Account[]> {
     // pattern should be a SQL LIKE pattern (e.g. 'LIABILITY:MERCHANT:%:PAYIN')
     const res = await this.pool.query('SELECT * FROM accounts WHERE id LIKE $1', [pattern]);
-    return res.rows.map(r => ({
+    return res.rows.map((r: any) => ({
       id: r.id,
       code: r.code,
       type: r.type,

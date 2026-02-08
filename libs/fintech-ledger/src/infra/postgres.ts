@@ -60,7 +60,7 @@ export function initConnection(config: LedgerPoolConfig): Pool {
   });
 
   // STRICT: Force IST Timezone for all sessions
-  pool.on('connect', async (client) => {
+  pool.on('connect', async (client: PoolClient) => {
     await client.query(`SET timezone = '${timezone || process.env.DB_TIMEZONE || 'Asia/Kolkata'}'`);
     const tuning = getSessionTuning();
     await client.query(`SET statement_timeout = ${tuning.statementTimeoutMs}`);
@@ -84,7 +84,7 @@ function getPool(): Pool {
     });
 
     // STRICT: Force IST Timezone for all sessions
-    pool.on('connect', async (client) => {
+    pool.on('connect', async (client: PoolClient) => {
       await client.query(`SET timezone = '${process.env.DB_TIMEZONE || 'Asia/Kolkata'}'`);
       const tuning = getSessionTuning();
       await client.query(`SET statement_timeout = ${tuning.statementTimeoutMs}`);

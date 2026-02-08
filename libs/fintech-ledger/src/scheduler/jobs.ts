@@ -140,7 +140,7 @@ export async function runSealLedgerJob(options: SealLedgerJobOptions = {}): Prom
         const linesRes = await query(`SELECT account_id, amount FROM journal_lines WHERE entry_id = $1`, [
           entry.id,
         ]);
-        const lines = linesRes.rows.map((l) => ({ accountId: l.account_id, amount: BigInt(l.amount) }));
+        const lines = linesRes.rows.map((l: any) => ({ accountId: l.account_id, amount: BigInt(l.amount) }));
 
         const newHash: string = computeEntryHash(
           previousHash,
@@ -202,7 +202,7 @@ export async function runVerifyIntegrityJob(options: VerifyIntegrityJobOptions =
       const linesRes = await query(`SELECT account_id, amount FROM journal_lines WHERE entry_id = $1`, [
         entry.id,
       ]);
-      const lines = linesRes.rows.map((l) => ({ accountId: l.account_id, amount: BigInt(l.amount) }));
+      const lines = linesRes.rows.map((l: any) => ({ accountId: l.account_id, amount: BigInt(l.amount) }));
 
       const computed = computeEntryHash(
         previousHash,
@@ -412,10 +412,10 @@ export async function runEodRebuildJob(
         );
         snapshots = snapRes.rowCount || 0;
       } else if (updatedRes.rowCount && updatedRes.rowCount > 0) {
-        const ids = updatedRes.rows.map((r) => r.id);
-        const balances = updatedRes.rows.map((r) => r.calc_balance);
+        const ids = updatedRes.rows.map((r: any) => r.id);
+        const balances = updatedRes.rows.map((r: any) => r.calc_balance);
         const values = ids
-          .map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2}::bigint, $${ids.length * 2 + 1})`)
+          .map((_: any, i: number) => `($${i * 2 + 1}, $${i * 2 + 2}::bigint, $${ids.length * 2 + 1})`)
           .join(',');
         const params = [...ids, ...balances, eodAt];
         const snapRes = await client.query(

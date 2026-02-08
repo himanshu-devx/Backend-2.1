@@ -2,14 +2,16 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ES2022",
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "types": [
       "node"
     ],
     "strict": true,
     "noImplicitAny": true,
     "skipLibCheck": true,
+    "esModuleInterop": true,
     "baseUrl": ".",
+    "outDir": "dist",
     "paths": {
       "@/*": [
         "src/*"
