@@ -42,6 +42,7 @@ export enum TransactionPartyType {
     SYSTEM = "SYSTEM",
     SUPER_ADMIN = "SUPER_ADMIN",
     WORLD = "WORLD",
+    INCOME = "INCOME",
     OTHER = "OTHER",
 }
 

@@ -26,4 +26,5 @@ ENV SERVICE=api
 COPY --from=builder /app/dist ./dist
 COPY package.json ./
 
-CMD ["sh", "-c", "bun run dist/${SERVICE}.js"]
+CMD ["sh", "-c", "bun ./dist/${SERVICE}.js"]
+

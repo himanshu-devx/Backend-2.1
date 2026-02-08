@@ -342,6 +342,12 @@ export class LedgerOperationService {
     let providerId = data.providerId;
     let legalEntityId = data.legalEntityId;
     let providerLegalEntityId = data.providerLegalEntityId;
+    const counterpartyParty =
+      data.counterparty === "WORLD"
+        ? { type: TransactionPartyType.WORLD }
+        : data.counterparty === "INCOME"
+          ? { type: TransactionPartyType.INCOME }
+          : undefined;
 
     // Resolve context from accountId if available
     let derivedAccountPurpose: MerchantAccountPurpose | undefined;
@@ -439,6 +445,7 @@ export class LedgerOperationService {
     if (prepResult.metadata) Object.assign(metadata, prepResult.metadata);
     if (prepResult.fromDetails) fromDetails = prepResult.fromDetails;
     if (prepResult.toDetails) toDetails = prepResult.toDetails;
+    if (!party && counterpartyParty) party = counterpartyParty;
 
     return LedgerTransferService.createTransfer(
       {
