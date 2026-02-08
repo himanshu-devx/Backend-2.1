@@ -4,17 +4,12 @@
   "type": "module",
   "packageManager": "bun@1.3.1",
   "scripts": {
-    "api": "bun run dist/api.js",
-    "payment": "bun run dist/payment.js",
-    "dev": "concurrently -k -n api,payment -c blue,magenta \"bun run dev:api\" \"bun run dev:payment\"",
     "dev:api": "tsx watch -r dotenv/config src/instances/api.ts",
     "dev:payment": "tsx watch -r dotenv/config src/instances/payment.ts",
-    "build:api": "bun build src/instances/api.ts --target=bun --outdir=dist --outfile=api.js --external argon2",
-    "build:payment": "bun build src/instances/payment.ts --target=bun --outdir=dist --outfile=payment.js --external argon2",
-    "build:worker": "bun build src/workers/webhook.worker.ts --target=bun --outdir=dist --outfile=worker.js --external argon2",
-    "build:all": "bun run build:api && bun run build:payment && bun run build:worker",
-    "build": "bun run build:all",
-    "start": "concurrently \"bun run api\" \"bun run payment\"",
+    "build": "tsc -p tsconfig.build.json",
+    "start:api": "node dist/instances/api.js",
+    "start:payment": "node dist/instances/payment.js",
+    "start:worker": "node dist/workers/webhook.worker.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

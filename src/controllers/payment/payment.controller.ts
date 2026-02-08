@@ -41,7 +41,7 @@ export class PaymentController {
 
       if (error instanceof PaymentError || error?.name === "PaymentError") {
         const payload = (error as PaymentError).toMerchantJSON();
-        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus || 400);
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus as any || 400);
       }
       if (error.code === 11000) {
         throw Conflict("Order ID already exists. Please use a unique Order ID.");
@@ -78,7 +78,7 @@ export class PaymentController {
 
       if (error instanceof PaymentError || error?.name === "PaymentError") {
         const payload = (error as PaymentError).toMerchantJSON();
-        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus || 400);
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus as any || 400);
       }
       if (error.code === 11000) {
         throw Conflict("Order ID already exists. Please use a unique Order ID.");

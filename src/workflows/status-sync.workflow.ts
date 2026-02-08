@@ -52,7 +52,7 @@ export class StatusSyncWorkflow {
                 }
             } else if (result.status === "FAILED") {
                 if (transaction.type === "PAYOUT") {
-                    await PaymentLedgerService.rollbackPayout(transaction);
+                    await PaymentLedgerService.voidPayout(transaction);
                 }
             }
 

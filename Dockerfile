@@ -2,21 +2,21 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 ENV NODE_ENV=production
-ENV SERVICE=api
+ENV SERVICE=instances/api
 
-# Native build deps (argon2)
 RUN apt-get update && apt-get install -y \
   python3 \
   make \
   g++ \
   && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
+COPY package.json package-lock.json* tsconfig.build.json tsconfig.json ./
+RUN npm install
 
-# Copy source / build output
-COPY dist ./dist
+COPY src ./src
+COPY libs ./libs
 
-# Run selected service
+RUN npm run build
+RUN npm prune --omit=dev
+
 CMD ["sh", "-c", "node dist/${SERVICE}.js"]

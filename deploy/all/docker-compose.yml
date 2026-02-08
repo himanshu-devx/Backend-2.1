@@ -4,7 +4,7 @@ services:
       context: ../../
       dockerfile: Dockerfile
     environment:
-      SERVICE: api
+      SERVICE: instances/api
     env_file: ./.env
     ports:
       - "${API_PORT:-4000}:4000"
@@ -25,7 +25,7 @@ services:
       context: ../../
       dockerfile: Dockerfile
     environment:
-      SERVICE: payment
+      SERVICE: instances/payment
     env_file: ./.env
     ports:
       - "${PAYMENT_PORT:-3000}:3000"
@@ -46,7 +46,7 @@ services:
       context: ../../
       dockerfile: Dockerfile
     environment:
-      SERVICE: worker
+      SERVICE: instances/worker
     env_file: ./.env
     restart: unless-stopped
     networks: [ app_net ]

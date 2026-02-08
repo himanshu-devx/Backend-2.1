@@ -80,17 +80,17 @@ export async function seedAccounts(ledger: Ledger) {
             if (!existing) throw new Error("Account missing");
         } catch (err) {
             try {
-                await ledger.createAccount(
-                    root.id,
-                    root.code,
-                    root.type,
-                    false, // allowOverdraft
-                    undefined, // parentId
-                    true, // isHeader
-                    AccountStatus.ACTIVE,
-                    '0',
-                    'system-seed'
-                );
+                await ledger.createAccount({
+                    id: root.id,
+                    code: root.code,
+                    type: root.type,
+                    allowOverdraft: false,
+                    isHeader: true,
+                    status: AccountStatus.ACTIVE,
+                    minBalance: '0',
+                    // parentId is undefined, no need to include or set undefined
+                    // actorId usage handled internally or via default
+                });
                 logger.info(`[FintechLedger] Seeded account: ${root.name}`);
             } catch (createErr: any) {
                 if (createErr.code !== '23505') {

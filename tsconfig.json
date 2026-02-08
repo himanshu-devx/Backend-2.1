@@ -8,9 +8,6 @@
     ],
     "strict": true,
     "noImplicitAny": true,
-    "typeRoots": [
-      "./node_modules/@types"
-    ],
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {

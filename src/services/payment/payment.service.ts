@@ -2,6 +2,7 @@ import { TransactionModel, TransactionDocument } from "@/models/transaction.mode
 import { NotFound } from "@/utils/error";
 import { InitiatePayinDto } from "@/dto/payment/payin.dto";
 import { InitiatePayoutDto } from "@/dto/payment/payout.dto";
+import { mapTransactionAmountsToDisplay } from "@/utils/money.util";
 
 export class PaymentService {
   async createPayin(
@@ -37,7 +38,9 @@ export class PaymentService {
     }
 
     const workflow = new StatusSyncWorkflow();
-    return workflow.execute(merchantId, orderId);
+    const result = await workflow.execute(merchantId, orderId);
+    const payload = (result as any)?.toObject ? (result as any).toObject() : result;
+    return mapTransactionAmountsToDisplay(payload);
   }
 
   async getStatusByType(
@@ -60,7 +63,9 @@ export class PaymentService {
     }
 
     const workflow = new StatusSyncWorkflow();
-    return workflow.execute(merchantId, orderId);
+    const result = await workflow.execute(merchantId, orderId);
+    const payload = (result as any)?.toObject ? (result as any).toObject() : result;
+    return mapTransactionAmountsToDisplay(payload);
   }
 }
 

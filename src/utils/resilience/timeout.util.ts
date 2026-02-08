@@ -11,7 +11,7 @@ export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number
 ): Promise<T> {
-  let timer: NodeJS.Timeout;
+  let timer: NodeJS.Timeout | undefined;
   const timeoutPromise = new Promise<T>((_, reject) => {
     timer = setTimeout(() => reject(new TimeoutError()), timeoutMs);
   });

@@ -1,4 +1,4 @@
-import { WebhookWorkflow } from "./webhook.workflow";
+import { WebhookWorkflow } from "@/workflows/webhook.workflow";
 
 export class WebhookService {
     private workflow: WebhookWorkflow;
