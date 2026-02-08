@@ -1,11 +1,36 @@
 import { LedgerService } from './ledger.service';
 import { merchantRepository } from '@/repositories/merchant.repository';
-import { AccountStatement, TrialBalance, BalanceSheet, GeneralLedger } from 'fintech-ledger';
+import { AccountStatement, TrialBalance, BalanceSheet, GeneralLedger, AccountType } from 'fintech-ledger';
 import { getShiftedISTDate } from '@/utils/date.util';
 import { toDisplayAmountFromLedger } from '@/utils/money.util';
+import { LedgerUtils } from '@/utils/ledger.utils';
 
 const toRupeesFromLedger = (rawVal: any): number => toDisplayAmountFromLedger(rawVal);
 const formatRupees = (rawVal: any) => `₹ ${toDisplayAmountFromLedger(rawVal).toFixed(2)}`;
+
+const resolveNormalSide = (accountId: string): "DEBIT" | "CREDIT" => {
+    const parsed = LedgerUtils.parseAccountId(accountId);
+    const ledgerType = parsed?.ledgerType as AccountType | undefined;
+    switch (ledgerType) {
+        case AccountType.LIABILITY:
+        case AccountType.EQUITY:
+        case AccountType.INCOME:
+            return "CREDIT";
+        case AccountType.ASSET:
+        case AccountType.EXPENSE:
+        case AccountType.OFF_BALANCE:
+        default:
+            return "DEBIT";
+    }
+};
+
+const classifySide = (amount: number, normalSide: "DEBIT" | "CREDIT") => {
+    if (!amount) return normalSide;
+    if (normalSide === "DEBIT") {
+        return amount >= 0 ? "DEBIT" : "CREDIT";
+    }
+    return amount >= 0 ? "CREDIT" : "DEBIT";
+};
 
 export interface GetEntriesOptions {
     // Pagination

@@ -2,7 +2,9 @@ version: "3.9"
 
 services:
   api:
-    image: ${APP_IMAGE}:${APP_TAG}
+    build:
+      context: ../../
+      dockerfile: Dockerfile
     environment:
       SERVICE: api
     env_file: ./.env
@@ -18,7 +20,9 @@ services:
       - otel-collector
 
   payment:
-    image: ${APP_IMAGE}:${APP_TAG}
+    build:
+      context: ../../
+      dockerfile: Dockerfile
     environment:
       SERVICE: payment
     env_file: ./.env
@@ -79,7 +83,7 @@ services:
   redis:
     image: redis:7
     env_file: ./.env
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis}"]
+    command: [ "redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-redis}" ]
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -120,7 +124,7 @@ services:
 
   loki:
     image: grafana/loki:2.9.8
-    command: ["-config.file=/etc/loki/loki-config.yml"]
+    command: [ "-config.file=/etc/loki/loki-config.yml" ]
     volumes:
       - ../monitoring/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki_data:/loki
@@ -132,7 +136,7 @@ services:
 
   promtail:
     image: grafana/promtail:2.9.8
-    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    command: [ "-config.file=/etc/promtail/promtail-config.yml" ]
     volumes:
       - ../monitoring/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
@@ -143,7 +147,7 @@ services:
 
   tempo:
     image: grafana/tempo:2.5.0
-    command: ["-config.file=/etc/tempo/tempo.yml"]
+    command: [ "-config.file=/etc/tempo/tempo.yml" ]
     volumes:
       - ../monitoring/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo_data:/var/tempo
@@ -157,7 +161,7 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.106.0
-    command: ["--config=/etc/otel/otel-collector.yml"]
+    command: [ "--config=/etc/otel/otel-collector.yml" ]
     volumes:
       - ../monitoring/otel-collector.yml:/etc/otel/otel-collector.yml:ro
     ports:
@@ -215,6 +219,7 @@ volumes:
   tempo_data:
   caddy_data:
   caddy_config:
+
 
 networks:
   app_net:
