@@ -6,6 +6,7 @@ import { LedgerService } from "@/services/ledger/ledger.service";
 import { LedgerUtils } from "@/utils/ledger.utils";
 import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
 import { AccountType } from "fintech-ledger";
+import { toDisplayAmount } from "@/utils/money.util";
 
 
 export interface AnalyticsStats {
@@ -74,14 +75,26 @@ export class AnalyticsService {
       createdAt: { $gte: startDate, $lte: endDate },
     };
 
-    if (filters.merchantIds?.length) matchStage.merchantId = { $in: filters.merchantIds };
-    if (filters.providerIds?.length) matchStage.providerId = { $in: filters.providerIds };
-    if (filters.legalEntityIds?.length) matchStage.legalEntityId = { $in: filters.legalEntityIds };
+    // Handle Merchant Filters (Array takes precedence)
+    if (filters.merchantIds?.length) {
+      matchStage.merchantId = { $in: filters.merchantIds };
+    } else if (filters.merchantId) {
+      matchStage.merchantId = filters.merchantId;
+    }
 
-    // Fallback simple filters override array filters if both present (should handle in caller)
-    if (filters.merchantId) matchStage.merchantId = filters.merchantId;
-    if (filters.providerId) matchStage.providerId = filters.providerId;
-    if (filters.legalEntityId) matchStage.legalEntityId = filters.legalEntityId;
+    // Handle Provider Filters
+    if (filters.providerIds?.length) {
+      matchStage.providerId = { $in: filters.providerIds };
+    } else if (filters.providerId) {
+      matchStage.providerId = filters.providerId;
+    }
+
+    // Handle Legal Entity Filters
+    if (filters.legalEntityIds?.length) {
+      matchStage.legalEntityId = { $in: filters.legalEntityIds };
+    } else if (filters.legalEntityId) {
+      matchStage.legalEntityId = filters.legalEntityId;
+    }
 
     const pipeline: any[] = [
       { $match: matchStage },
@@ -373,7 +386,7 @@ export class AnalyticsService {
                 _id: 0,
                 date: {
                   $dateToString: {
-                    format: timeUnit === "hour" ? "%H:00" : "%d %b",
+                    format: timeUnit === "hour" ? "%H:00" : "%Y-%m-%d",
                     date: "$_id",
                     timezone: "Asia/Kolkata"
                   }
@@ -417,8 +430,34 @@ export class AnalyticsService {
     const payinStats = data.payinOverview?.[0] ? { ...data.payinOverview[0] } : { ...defaultStats };
     const payoutStats = data.payoutOverview?.[0] ? { ...data.payoutOverview[0] } : { ...defaultStats };
 
+    const normalizeStats = (stats: any) => ({
+      ...stats,
+      totalVolume: toDisplayAmount(stats.totalVolume || 0),
+      successVolume: toDisplayAmount(stats.successVolume || 0),
+      failedVolume: toDisplayAmount(stats.failedVolume || 0),
+      pendingVolume: toDisplayAmount(stats.pendingVolume || 0),
+      avgTransactionAmount: toDisplayAmount(stats.avgTransactionAmount || 0),
+      highTransactionAmount: toDisplayAmount(stats.highTransactionAmount || 0),
+      successFees: toDisplayAmount(stats.successFees || 0),
+    });
+
+    const normalizedPayinStats = normalizeStats(payinStats);
+    const normalizedPayoutStats = normalizeStats(payoutStats);
+
     // --- Real-time Balance Integration ---
-    const merchantIds = filters.merchantIds || (filters.merchantId ? (Array.isArray(filters.merchantId) ? filters.merchantId : [filters.merchantId]) : []);
+    let merchantIds = filters.merchantIds || (filters.merchantId ? (Array.isArray(filters.merchantId) ? filters.merchantId : [filters.merchantId]) : []);
+
+    // If no merchants specified, fetch all merchants
+    if (merchantIds.length === 0) {
+      try {
+        const { MerchantModel } = await import('@/models/merchant.model');
+        const allMerchants = await MerchantModel.find({}).select('id').lean();
+        merchantIds = allMerchants.map(m => m.id);
+      } catch (error) {
+        console.error('Failed to fetch all merchants for balance calculation:', error);
+        merchantIds = [];
+      }
+    }
 
     if (merchantIds.length > 0) {
       let totalPayinBalance = 0;
@@ -433,8 +472,6 @@ export class AnalyticsService {
           LedgerService.getBalance(payoutId).catch(() => "0.00")
         ]);
 
-
-
         // Payin Balance (Money In)
         totalPayinBalance += parseFloat(payinBal);
 
@@ -442,25 +479,23 @@ export class AnalyticsService {
         totalPayoutBalance += parseFloat(payoutBal);
       }
 
-      // Convert to Absolute for Liability Accounts (Negative in raw mode means we owe them = their balance)
-      // Actually per Ledger.ts logic for LIABILITY:
-      // normalizedAmount = -rawAmount.
-      // So if raw balance is -100 (Credit), normalized is +100.
-      // LedgerService.getBalance already calls normalizeDisplayBalance.
-      // Since displayMode is 'raw', it returns raw amount.
-      // Merchant LIABILITY account: 100 Credit = -100 in raw.
-      // We want to show it as 100 (available funds).
-      payinStats.balance = Math.abs(totalPayinBalance).toFixed(2);
-      payoutStats.balance = Math.abs(totalPayoutBalance).toFixed(2);
+      // Convert to Absolute for Liability Accounts
+      // LedgerService.getBalance returns normalized balance (positive for LIABILITY)
+      normalizedPayinStats.balance = Math.abs(totalPayinBalance).toFixed(2);
+      normalizedPayoutStats.balance = Math.abs(totalPayoutBalance).toFixed(2);
     } else {
-      payinStats.balance = "0.00";
-      payoutStats.balance = "0.00";
+      normalizedPayinStats.balance = "0.00";
+      normalizedPayoutStats.balance = "0.00";
     }
 
     return {
-      payin: payinStats,
-      payout: payoutStats,
-      timeSeries: data.timeSeries || []
+      payin: normalizedPayinStats,
+      payout: normalizedPayoutStats,
+      timeSeries: (data.timeSeries || []).map((row: any) => ({
+        ...row,
+        payin: toDisplayAmount(row.payin || 0),
+        payout: toDisplayAmount(row.payout || 0),
+      }))
     };
   }
 

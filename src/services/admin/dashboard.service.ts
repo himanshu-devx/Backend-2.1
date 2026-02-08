@@ -17,6 +17,15 @@ export class DashboardService {
     bucket?: "hourly" | "daily"
   ): Promise<Result<any, HttpError>> {
     const filters: any = {};
+    const normalizeBucket = (value?: string): "hourly" | "daily" | undefined => {
+      if (!value) return undefined;
+      if (value === "hourly" || value === "hour") return "hourly";
+      if (value === "daily" || value === "day") return "daily";
+      return undefined;
+    };
+    const normalizedBucket = normalizeBucket(bucket);
+    let timeFrame: "hourly" | "daily" = "daily";
+
     // Validate and parse dates with strict YYYY-MM-DD format
     if (startDate || endDate) {
       if (!startDate || !endDate) {
@@ -28,6 +37,7 @@ export class DashboardService {
         const dateRange = parseDateRangeToIST(startDate, endDate);
         filters.startDate = dateRange.startDate;
         filters.endDate = dateRange.endDate;
+        timeFrame = normalizedBucket || (startDate === endDate ? "hourly" : "daily");
       } catch (error: any) {
         return err(new AppError(error.message || "Invalid date format. Expected YYYY-MM-DD", { status: 400 }));
       }
@@ -37,13 +47,23 @@ export class DashboardService {
       const todayRange = getTodayRangeIST();
       filters.startDate = todayRange.start;
       filters.endDate = todayRange.end;
-      if (!bucket) filters.bucket = "hourly";
+      timeFrame = normalizedBucket || "hourly";
     }
 
-    if (merchantId) filters.merchantId = merchantId;
-    if (providerId) filters.providerId = providerId;
-    if (legalEntityId) filters.legalEntityId = legalEntityId;
-    if (bucket) filters.bucket = bucket;
+    if (merchantId) {
+      if (Array.isArray(merchantId)) filters.merchantIds = merchantId;
+      else filters.merchantId = merchantId;
+    }
+    if (providerId) {
+      if (Array.isArray(providerId)) filters.providerIds = providerId;
+      else filters.providerId = providerId;
+    }
+    if (legalEntityId) {
+      if (Array.isArray(legalEntityId)) filters.legalEntityIds = legalEntityId;
+      else filters.legalEntityId = legalEntityId;
+    }
+    if (normalizedBucket) filters.bucket = normalizedBucket;
+    filters.timeFrame = timeFrame;
 
     // 1. Merchant Stats
     const totalMerchants = await MerchantModel.countDocuments({});

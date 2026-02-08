@@ -9,7 +9,8 @@ import { MerchantManagementService } from "../admin/merchant-management.service"
 import crypto from "crypto";
 import { getISTDate } from "@/utils/date.util";
 import type { AnalyticsFilters } from "@/services/analytics/analytics.service";
-import { encryptSecret } from "@/utils/secret.util";
+import { decryptSecret, encryptSecret } from "@/utils/secret.util";
+import { MerchantModel } from "@/models/merchant.model";
 
 export class MerchantSelfService {
   // Use MerchantManagementService for read operations to avoid code duplication
@@ -107,6 +108,28 @@ export class MerchantSelfService {
       apiKey: fullResult.value.id,
       id,
     });
+  }
+
+  static async getOwnApiSecret(id: string) {
+    const merchant = await MerchantModel.findOne({ id }).select(
+      "+apiSecretEncrypted"
+    );
+    if (!merchant) return err(NotFound("Merchant not found"));
+
+    if (!merchant.apiSecretEnabled) {
+      return err(new AppError("API secret is disabled", { status: 403 }));
+    }
+
+    if (!merchant.apiSecretEncrypted) {
+      return err(new AppError("API secret not available", { status: 404 }));
+    }
+
+    const apiSecret = decryptSecret(merchant.apiSecretEncrypted);
+    if (!apiSecret) {
+      return err(new AppError("Failed to decrypt API secret", { status: 500 }));
+    }
+
+    return ok({ apiKey: merchant.id, apiSecret });
   }
 
   // --- NEW FEATURES ---

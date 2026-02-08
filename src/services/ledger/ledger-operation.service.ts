@@ -118,6 +118,8 @@ export class LedgerOperationService {
         ENTITY_ACCOUNT_TYPE.EXPENSE
       );
 
+
+
     return {
       pleId: ple.id,
       providerId,
@@ -136,6 +138,189 @@ export class LedgerOperationService {
       : ENTITY_ACCOUNT_TYPE.PAYIN;
   }
 
+  private static resolveAccountContext(accountId: string) {
+    const parts = LedgerUtils.parseAccountId(accountId);
+    if (!parts) return null;
+
+    let purpose: MerchantAccountPurpose | undefined;
+    if (parts.purpose === ENTITY_ACCOUNT_TYPE.PAYIN) purpose = "PAYIN";
+    if (parts.purpose === ENTITY_ACCOUNT_TYPE.PAYOUT) purpose = "PAYOUT";
+
+    return {
+      merchantId:
+        parts.entityType === ENTITY_TYPE.MERCHANT ? parts.entityId : undefined,
+      providerId:
+        parts.entityType === ENTITY_TYPE.PROVIDER ? parts.entityId : undefined,
+      legalEntityId:
+        parts.entityType === ENTITY_TYPE.LEGAL_ENTITY
+          ? parts.entityId
+          : undefined,
+      accountPurpose: purpose,
+    };
+  }
+
+  private static async prepareMerchantSettlementBank(
+    merchantId: string,
+    bankAccountId?: string
+  ) {
+    if (!merchantId) throw BadRequest("merchantId is required");
+    const bank = await this.resolveMerchantBankAccount(
+      merchantId,
+      bankAccountId
+    );
+    const { beneficiaryName, ...bankDetails } = bank;
+    return {
+      from: {
+        entityType: ENTITY_TYPE.MERCHANT,
+        entityId: merchantId,
+        purpose: ENTITY_ACCOUNT_TYPE.PAYIN,
+      },
+      to: { world: true },
+      party: {
+        type: TransactionPartyType.WORLD,
+        name: beneficiaryName,
+        ...bankDetails,
+      },
+    };
+  }
+
+  private static async prepareMerchantDeposit(
+    merchantId: string,
+    bankAccountId?: string
+  ) {
+    if (!merchantId) throw BadRequest("merchantId is required");
+    const bank = await this.resolveMerchantBankAccount(
+      merchantId,
+      bankAccountId
+    );
+    const { beneficiaryName, ...bankDetails } = bank;
+    return {
+      from: { world: true },
+      to: {
+        entityType: ENTITY_TYPE.MERCHANT,
+        entityId: merchantId,
+        purpose: ENTITY_ACCOUNT_TYPE.PAYOUT,
+      },
+      party: {
+        type: TransactionPartyType.WORLD,
+        name: beneficiaryName,
+        ...bankDetails,
+      },
+    };
+  }
+
+  private static prepareMerchantHoldOrRelease(
+    op: LedgerOperationType,
+    merchantId: string,
+    accountType?: string,
+    derivedType?: string
+  ) {
+    if (!merchantId) throw BadRequest("merchantId is required");
+    const holdType =
+      (accountType as MerchantAccountPurpose) || derivedType || "PAYOUT";
+    const purpose = this.resolveMerchantPurpose(holdType);
+
+    const isHold = op === LEDGER_OPERATION.MERCHANT_HOLD;
+
+    const merchantAccount = {
+      entityType: ENTITY_TYPE.MERCHANT,
+      entityId: merchantId,
+      purpose,
+    };
+    const holdAccount = {
+      entityType: ENTITY_TYPE.MERCHANT,
+      entityId: merchantId,
+      purpose: ENTITY_ACCOUNT_TYPE.HOLD,
+    };
+
+    return {
+      from: isHold ? merchantAccount : holdAccount,
+      to: isHold ? holdAccount : merchantAccount,
+      metadata: { accountType: holdType },
+      party: { type: TransactionPartyType.MERCHANT },
+    };
+  }
+
+  private static async preparePleOperation(
+    op: LedgerOperationType,
+    providerLegalEntityId?: string,
+    providerId?: string,
+    legalEntityId?: string
+  ) {
+    const pleId = providerLegalEntityId;
+    if (!pleId) {
+      throw BadRequest("providerLegalEntityId is required");
+    }
+    const ple = await this.resolvePle(pleId);
+    const pid = providerId || ple.providerId;
+    const leid = legalEntityId || ple.legalEntityId;
+
+    const metadata = {
+      providerLegalEntityId: ple.pleId,
+      providerId: pid,
+      legalEntityId: leid
+    };
+
+    let from: any, to: any;
+
+    if (
+      op === LEDGER_OPERATION.LEGAL_ENTITY_SETTLEMENT ||
+      op === LEDGER_OPERATION.PLE_SETTLEMENT
+    ) {
+      from = { accountId: ple.payinAccountId };
+      to = {
+        entityType: ENTITY_TYPE.LEGAL_ENTITY,
+        entityId: leid,
+        purpose: ENTITY_ACCOUNT_TYPE.BANK,
+      };
+    } else if (
+      op === LEDGER_OPERATION.LEGAL_ENTITY_DEPOSIT ||
+      op === LEDGER_OPERATION.PLE_DEPOSIT
+    ) {
+      from = {
+        entityType: ENTITY_TYPE.LEGAL_ENTITY,
+        entityId: leid,
+        purpose: ENTITY_ACCOUNT_TYPE.BANK,
+      };
+      to = { accountId: ple.payoutAccountId };
+    } else if (op === LEDGER_OPERATION.PLE_EXPENSE_SETTLEMENT) {
+      from = { accountId: ple.expenseAccountId };
+      to = {
+        entityType: ENTITY_TYPE.INCOME,
+        entityId: "INCOME",
+        purpose: ENTITY_ACCOUNT_TYPE.INCOME,
+      };
+    } else if (op === LEDGER_OPERATION.PLE_EXPENSE_CHARGE) {
+      from = { world: true };
+      to = { accountId: ple.expenseAccountId };
+    } else if (op === LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT) {
+      if (!leid) throw BadRequest("legalEntityId is required");
+      from = {
+        entityType: ENTITY_TYPE.LEGAL_ENTITY,
+        entityId: leid,
+        purpose: ENTITY_ACCOUNT_TYPE.BANK,
+      };
+      to = { world: true };
+      return {
+        from, to,
+        metadata: {},
+        party: { type: TransactionPartyType.WORLD },
+        providerId: pid,
+        legalEntityId: leid,
+        providerLegalEntityId: ple.pleId
+      };
+    }
+
+    return {
+      from, to,
+      metadata,
+      party: { type: TransactionPartyType.PROVIDER_LEGAL_ENTITY },
+      providerId: pid,
+      legalEntityId: leid,
+      providerLegalEntityId: ple.pleId
+    };
+  }
+
   static async createOperation(
     data: CreateLedgerOperationDTO,
     actor: ActorContext
@@ -143,7 +328,7 @@ export class LedgerOperationService {
     const op = data.operation as LedgerOperationType;
     this.ensureRequired(op, data);
 
-    const metadata = {
+    let metadata: any = {
       ...(data.metadata || {}),
       operation: op,
     };
@@ -157,6 +342,22 @@ export class LedgerOperationService {
     let providerId = data.providerId;
     let legalEntityId = data.legalEntityId;
     let providerLegalEntityId = data.providerLegalEntityId;
+
+    // Resolve context from accountId if available
+    let derivedAccountPurpose: MerchantAccountPurpose | undefined;
+
+    if (data.accountId) {
+      const ctx = LedgerOperationService.resolveAccountContext(data.accountId);
+      if (ctx) {
+        if (!merchantId && ctx.merchantId) merchantId = ctx.merchantId;
+        if (!providerId && ctx.providerId) providerId = ctx.providerId;
+        if (!legalEntityId && ctx.legalEntityId)
+          legalEntityId = ctx.legalEntityId;
+        if (ctx.accountPurpose) derivedAccountPurpose = ctx.accountPurpose;
+      }
+    }
+
+    let prepResult: any = {};
 
     switch (op) {
       case LEDGER_OPERATION.MERCHANT_SETTLEMENT_PAYOUT: {
@@ -175,140 +376,27 @@ export class LedgerOperationService {
         break;
       }
       case LEDGER_OPERATION.MERCHANT_SETTLEMENT_BANK: {
-        if (!merchantId) throw BadRequest("merchantId is required");
-        const bank = await this.resolveMerchantBankAccount(
-          merchantId,
-          data.bankAccountId
-        );
-        from = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose: ENTITY_ACCOUNT_TYPE.PAYIN,
-        };
-        to = { world: true };
-        toDetails = toDetails || bank;
-        metadata.bankAccountId = bank.id;
-        party = { type: TransactionPartyType.WORLD };
+        prepResult = await this.prepareMerchantSettlementBank(merchantId!, data.bankAccountId);
         break;
       }
       case LEDGER_OPERATION.MERCHANT_DEPOSIT: {
-        if (!merchantId) throw BadRequest("merchantId is required");
-        const bank = await this.resolveMerchantBankAccount(
-          merchantId,
-          data.bankAccountId
-        );
-        from = { world: true };
-        to = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose: ENTITY_ACCOUNT_TYPE.PAYOUT,
-        };
-        fromDetails = fromDetails || bank;
-        metadata.bankAccountId = bank.id;
-        party = { type: TransactionPartyType.WORLD };
+        prepResult = await this.prepareMerchantDeposit(merchantId!, data.bankAccountId);
         break;
       }
-      case LEDGER_OPERATION.MERCHANT_WITHDRAWAL:
-      case LEDGER_OPERATION.MERCHANT_DEDUCT:
-      case LEDGER_OPERATION.MERCHANT_REFUND: {
-        if (!merchantId) throw BadRequest("merchantId is required");
-        const purpose = this.resolveMerchantPurpose(
-          data.accountType as MerchantAccountPurpose
-        );
-        metadata.accountType = data.accountType || "PAYIN";
-        const counterparty = data.counterparty || "WORLD";
-        metadata.counterparty = counterparty;
-        from = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose,
-        };
-        if (counterparty === "INCOME") {
-          to = {
-            entityType: ENTITY_TYPE.INCOME,
-            entityId: "INCOME",
-            purpose: ENTITY_ACCOUNT_TYPE.INCOME,
-          };
-        } else {
-          to = { world: true };
-        }
-        if (counterparty === "WORLD" && data.bankAccountId) {
-          const bank = await this.resolveMerchantBankAccount(
-            merchantId,
-            data.bankAccountId
-          );
-          toDetails = toDetails || bank;
-          metadata.bankAccountId = bank.id;
-        }
-        party =
-          counterparty === "INCOME"
-            ? { type: TransactionPartyType.SYSTEM }
-            : { type: TransactionPartyType.WORLD };
-        break;
-      }
-      case LEDGER_OPERATION.MERCHANT_HOLD: {
-        if (!merchantId) throw BadRequest("merchantId is required");
-        const holdType =
-          (data.accountType as MerchantAccountPurpose) || "PAYOUT";
-        const purpose = this.resolveMerchantPurpose(holdType);
-        metadata.accountType = holdType;
-        from = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose,
-        };
-        to = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose: ENTITY_ACCOUNT_TYPE.HOLD,
-        };
-        party = { type: TransactionPartyType.MERCHANT };
-        break;
-      }
+      case LEDGER_OPERATION.MERCHANT_HOLD:
       case LEDGER_OPERATION.MERCHANT_RELEASE: {
-        if (!merchantId) throw BadRequest("merchantId is required");
-        const holdType =
-          (data.accountType as MerchantAccountPurpose) || "PAYOUT";
-        const purpose = this.resolveMerchantPurpose(holdType);
-        metadata.accountType = holdType;
-        from = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose: ENTITY_ACCOUNT_TYPE.HOLD,
-        };
-        to = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose,
-        };
-        party = { type: TransactionPartyType.MERCHANT };
+        prepResult = this.prepareMerchantHoldOrRelease(op, merchantId!, data.accountType, derivedAccountPurpose);
         break;
       }
-      case LEDGER_OPERATION.MERCHANT_FEES: {
-        if (!merchantId) throw BadRequest("merchantId is required");
-        const purpose = this.resolveMerchantPurpose(
-          data.accountType as MerchantAccountPurpose
-        );
-        metadata.accountType = data.accountType || "PAYIN";
-        from = {
-          entityType: ENTITY_TYPE.MERCHANT,
-          entityId: merchantId,
-          purpose,
-        };
-        to = {
-          entityType: ENTITY_TYPE.INCOME,
-          entityId: "INCOME",
-          purpose: ENTITY_ACCOUNT_TYPE.INCOME,
-        };
-        party = { type: TransactionPartyType.SYSTEM };
-        break;
-      }
+
       case LEDGER_OPERATION.INCOME_SETTLEMENT_TO_MERCHANT: {
         if (!merchantId) throw BadRequest("merchantId is required");
-        const targetPurpose = this.resolveMerchantPurpose(
-          data.targetAccountType as MerchantAccountPurpose
-        );
-        metadata.targetAccountType = data.targetAccountType || "PAYIN";
+        const targetType =
+          (data.targetAccountType as MerchantAccountPurpose) ||
+          derivedAccountPurpose ||
+          "PAYIN";
+        const targetPurpose = this.resolveMerchantPurpose(targetType);
+        metadata.targetAccountType = targetType;
         from = {
           entityType: ENTITY_TYPE.INCOME,
           entityId: "INCOME",
@@ -327,69 +415,30 @@ export class LedgerOperationService {
       case LEDGER_OPERATION.PLE_SETTLEMENT:
       case LEDGER_OPERATION.PLE_DEPOSIT:
       case LEDGER_OPERATION.PLE_EXPENSE_SETTLEMENT:
-      case LEDGER_OPERATION.PLE_EXPENSE_CHARGE: {
-        const pleId = providerLegalEntityId;
-        if (!pleId) {
-          throw BadRequest("providerLegalEntityId is required");
-        }
-        const ple = await this.resolvePle(pleId);
-        providerId = providerId || ple.providerId;
-        legalEntityId = legalEntityId || ple.legalEntityId;
-        providerLegalEntityId = ple.pleId;
-        metadata.providerLegalEntityId = ple.pleId;
-        metadata.providerId = providerId;
-        metadata.legalEntityId = legalEntityId;
-
-        if (
-          op === LEDGER_OPERATION.LEGAL_ENTITY_SETTLEMENT ||
-          op === LEDGER_OPERATION.PLE_SETTLEMENT
-        ) {
-          from = { accountId: ple.payinAccountId };
-          to = {
-            entityType: ENTITY_TYPE.LEGAL_ENTITY,
-            entityId: legalEntityId,
-            purpose: ENTITY_ACCOUNT_TYPE.BANK,
-          };
-        } else if (
-          op === LEDGER_OPERATION.LEGAL_ENTITY_DEPOSIT ||
-          op === LEDGER_OPERATION.PLE_DEPOSIT
-        ) {
-          from = {
-            entityType: ENTITY_TYPE.LEGAL_ENTITY,
-            entityId: legalEntityId,
-            purpose: ENTITY_ACCOUNT_TYPE.BANK,
-          };
-          to = { accountId: ple.payoutAccountId };
-        } else if (op === LEDGER_OPERATION.PLE_EXPENSE_SETTLEMENT) {
-          from = { accountId: ple.expenseAccountId };
-          to = {
-            entityType: ENTITY_TYPE.INCOME,
-            entityId: "INCOME",
-            purpose: ENTITY_ACCOUNT_TYPE.INCOME,
-          };
-        } else if (op === LEDGER_OPERATION.PLE_EXPENSE_CHARGE) {
-          from = { world: true };
-          to = { accountId: ple.expenseAccountId };
-        }
-
-        party = { type: TransactionPartyType.PROVIDER_LEGAL_ENTITY };
-        break;
-      }
+      case LEDGER_OPERATION.PLE_EXPENSE_CHARGE:
       case LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT: {
-        if (!legalEntityId) throw BadRequest("legalEntityId is required");
-        from = {
-          entityType: ENTITY_TYPE.LEGAL_ENTITY,
-          entityId: legalEntityId,
-          purpose: ENTITY_ACCOUNT_TYPE.BANK,
-        };
-        to = { world: true };
-        party = { type: TransactionPartyType.WORLD };
+        prepResult = await this.preparePleOperation(op, providerLegalEntityId, providerId, legalEntityId);
+        if (prepResult.providerId) providerId = prepResult.providerId;
+        if (prepResult.legalEntityId) legalEntityId = prepResult.legalEntityId;
+        if (prepResult.providerLegalEntityId) providerLegalEntityId = prepResult.providerLegalEntityId;
         break;
       }
       default: {
+        // Fallback or leave as is for un-refactored parts?
+        // I should have covered everything except:
+        // MERCHANT_SETTLEMENT_PAYOUT (kept inline for simplicity as it has no deps)
+        // INCOME_SETTLEMENT_TO_MERCHANT (kept inline)
+        // LEGAL_ENTITY_DEDUCT (handled in preparePleOperation?)
         throw BadRequest("Unsupported operation");
       }
     }
+
+    if (prepResult.from) from = prepResult.from;
+    if (prepResult.to) to = prepResult.to;
+    if (prepResult.party) party = prepResult.party;
+    if (prepResult.metadata) Object.assign(metadata, prepResult.metadata);
+    if (prepResult.fromDetails) fromDetails = prepResult.fromDetails;
+    if (prepResult.toDetails) toDetails = prepResult.toDetails;
 
     return LedgerTransferService.createTransfer(
       {

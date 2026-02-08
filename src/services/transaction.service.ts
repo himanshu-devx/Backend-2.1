@@ -12,6 +12,7 @@ import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
 import { getShiftedISTDate, getISTDate } from "@/utils/date.util";
 import { LedgerService } from "@/services/ledger/ledger.service";
 import { TransactionStatus } from "@/models/transaction.model";
+import { mapTransactionAmountsToDisplay } from "@/utils/money.util";
 
 export interface TransactionListFilter extends ListQueryDTO {
   merchantId?: string; // Kept for alias
@@ -195,11 +196,11 @@ export class TransactionService {
       const narration = [txn.type, txn.paymentMode, txn.utr]
         .filter(Boolean)
         .join("/");
-      return {
+      return mapTransactionAmountsToDisplay({
         ...txn,
         createdAt: getShiftedISTDate(txn.createdAt),
         narration,
-      };
+      });
     });
 
     return ok({
@@ -275,10 +276,12 @@ export class TransactionService {
       });
     }
 
-    return ok({
-      ...txn,
-      createdAt: getShiftedISTDate(txn.createdAt),
-    } as any);
+    return ok(
+      mapTransactionAmountsToDisplay({
+        ...txn,
+        createdAt: getShiftedISTDate(txn.createdAt),
+      } as any)
+    );
   }
 
   /**

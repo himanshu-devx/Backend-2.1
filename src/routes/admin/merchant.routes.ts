@@ -187,6 +187,12 @@ adminMerchantsRoutes.delete(
   handler(MerchantManagementController.deletePayoutFee)
 );
 
+adminMerchantsRoutes.get(
+  "/:id/api-secret",
+  authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),
+  handler(MerchantManagementController.getApiSecret)
+);
+
 adminMerchantsRoutes.post(
   "/:id/rotate-api-secret",
   authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),

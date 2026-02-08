@@ -2,6 +2,10 @@ import { LedgerService } from './ledger.service';
 import { merchantRepository } from '@/repositories/merchant.repository';
 import { AccountStatement, TrialBalance, BalanceSheet, GeneralLedger } from 'fintech-ledger';
 import { getShiftedISTDate } from '@/utils/date.util';
+import { toDisplayAmountFromLedger } from '@/utils/money.util';
+
+const toRupeesFromLedger = (rawVal: any): number => toDisplayAmountFromLedger(rawVal);
+const formatRupees = (rawVal: any) => `₹ ${toDisplayAmountFromLedger(rawVal).toFixed(2)}`;
 
 export interface GetEntriesOptions {
     // Pagination
@@ -101,8 +105,9 @@ export class LedgerEntryService {
             filteredEntries = filteredEntries.filter((entry: any) => {
                 const line = entry.lines?.find((l: any) => l.accountId === accountId);
                 if (!line) return false;
-                const amt = BigInt(Math.round(Number(line.amount)));
-                return type === 'DEBIT' ? amt > 0n : amt < 0n;
+                const amt = Number(line.amount);
+                if (Number.isNaN(amt)) return false;
+                return type === 'DEBIT' ? amt > 0 : amt < 0;
             });
         }
 
@@ -110,7 +115,7 @@ export class LedgerEntryService {
             filteredEntries = filteredEntries.filter((entry: any) => {
                 const line = entry.lines?.find((l: any) => l.accountId === accountId);
                 if (!line) return false;
-                const amount = Math.abs(Number(line.amount) / 100);
+                const amount = Math.abs(toRupeesFromLedger(line.amount));
                 if (minAmount !== undefined && amount < minAmount) return false;
                 if (maxAmount !== undefined && amount > maxAmount) return false;
                 return true;
@@ -123,8 +128,8 @@ export class LedgerEntryService {
             if (sortBy === 'amount') {
                 const aLine = a.lines?.find((l: any) => l.accountId === accountId);
                 const bLine = b.lines?.find((l: any) => l.accountId === accountId);
-                aValue = aLine ? Math.abs(Number(aLine.amount)) : 0;
-                bValue = bLine ? Math.abs(Number(bLine.amount)) : 0;
+                aValue = aLine ? Math.abs(toRupeesFromLedger(aLine.amount)) : 0;
+                bValue = bLine ? Math.abs(toRupeesFromLedger(bLine.amount)) : 0;
             } else if (sortBy === 'postedAt') {
                 aValue = new Date(a.postedAt || a.createdAt).getTime();
                 bValue = new Date(b.postedAt || b.createdAt).getTime();
@@ -143,16 +148,14 @@ export class LedgerEntryService {
         const formattedEntries = paginatedEntries.map((entry: any) => {
             const line = entry.lines?.find((l: any) => l.accountId === accountId);
             const rawVal = line?.amount || '0';
-            const isNormalized = typeof rawVal === 'string' && rawVal.includes('.');
-            const amountCents = isNormalized ? Math.round(Number(rawVal) * 100) : Math.round(Number(rawVal));
-            const amount = BigInt(amountCents);
+            const amountValue = toRupeesFromLedger(rawVal);
 
             return {
                 id: entry.id,
                 postedAt: getShiftedISTDate(entry.postedAt || entry.createdAt),
-                amount: `₹ ${(Math.abs(Number(amount)) / 100).toFixed(2)}`,
+                amount: `₹ ${Math.abs(amountValue).toFixed(2)}`,
                 currency: 'INR',
-                type: amount > 0n ? 'DEBIT' : 'CREDIT',
+                type: amountValue > 0 ? 'DEBIT' : 'CREDIT',
                 status: entry.status,
                 description: entry.description || '',
                 metadata: entry.metadata || {},
@@ -160,14 +163,12 @@ export class LedgerEntryService {
                     ?.filter((l: any) => l.accountId !== accountId)
                     .map((l: any) => {
                         const rVal = l.amount || '0';
-                        const rNormalized = typeof rVal === 'string' && rVal.includes('.');
-                        const rCents = rNormalized ? Math.round(Number(rVal) * 100) : Math.round(Number(rVal));
-                        const rAmt = BigInt(rCents);
+                        const rAmt = toRupeesFromLedger(rVal);
                         return {
                             accountId: l.accountId,
-                            amount: `₹ ${(Math.abs(Number(rAmt)) / 100).toFixed(2)}`,
+                            amount: `₹ ${Math.abs(rAmt).toFixed(2)}`,
                             currency: 'INR',
-                            type: rAmt > 0n ? 'DEBIT' : 'CREDIT',
+                            type: rAmt > 0 ? 'DEBIT' : 'CREDIT',
                         };
                     }) || [],
             };
@@ -218,13 +219,13 @@ export class LedgerEntryService {
             // However, traditionally: Debit (left), Credit (right)
             // For a merchant account (Liability):
             // CREDIT increases balance (Inflow), DEBIT decreases balance (Outflow)
-            const amt = BigInt(Math.round(Number(line.rawAmount)));
+            const amt = toRupeesFromLedger(line.rawAmount);
             return {
                 date: getShiftedISTDate(line.date),
                 description: line.description,
-                debit: amt > 0n ? `₹ ${(Math.abs(Number(amt)) / 100).toFixed(2)}` : '₹ 0.00',
-                credit: amt < 0n ? `₹ ${(Math.abs(Number(amt)) / 100).toFixed(2)}` : '₹ 0.00',
-                runningBalance: `₹ ${(Number(line.balanceAfter) / 100).toFixed(2)}`,
+                debit: amt > 0 ? `₹ ${Math.abs(amt).toFixed(2)}` : '₹ 0.00',
+                credit: amt < 0 ? `₹ ${Math.abs(amt).toFixed(2)}` : '₹ 0.00',
+                runningBalance: formatRupees(line.balanceAfter),
                 currency: 'INR',
                 entryId: line.entryId
             };
@@ -232,10 +233,10 @@ export class LedgerEntryService {
 
         return {
             period: { start: getShiftedISTDate(start), end: getShiftedISTDate(end) },
-            openingBalance: `₹ ${(Number(glReport.openingBalance) / 100).toFixed(2)}`,
-            debitTotal: `₹ ${(Math.abs(Number(glReport.debitTotal)) / 100).toFixed(2)}`,
-            creditTotal: `₹ ${(Math.abs(Number(glReport.creditTotal)) / 100).toFixed(2)}`,
-            closingBalance: `₹ ${(Number(glReport.closingBalance) / 100).toFixed(2)}`,
+            openingBalance: formatRupees(glReport.openingBalance),
+            debitTotal: `₹ ${Math.abs(toRupeesFromLedger(glReport.debitTotal)).toFixed(2)}`,
+            creditTotal: `₹ ${Math.abs(toRupeesFromLedger(glReport.creditTotal)).toFixed(2)}`,
+            closingBalance: formatRupees(glReport.closingBalance),
             currency: 'INR',
             lines: formattedLines
         };
@@ -265,11 +266,11 @@ export class LedgerEntryService {
         return {
             period: { start: getShiftedISTDate(start), end: getShiftedISTDate(end) },
             summary: {
-                openingBalance: `₹ ${(Number(report.openingBalance) / 100).toFixed(2)}`,
-                debitTotal: `₹ ${(Number(report.debitTotal) / 100).toFixed(2)}`,
-                creditTotal: `₹ ${(Number(report.creditTotal) / 100).toFixed(2)}`,
-                netChange: `₹ ${(Number(report.closingBalance - report.openingBalance) / 100).toFixed(2)}`,
-                closingBalance: `₹ ${(Number(report.closingBalance) / 100).toFixed(2)}`,
+                openingBalance: formatRupees(report.openingBalance),
+                debitTotal: formatRupees(report.debitTotal),
+                creditTotal: formatRupees(report.creditTotal),
+                netChange: formatRupees(Number(report.closingBalance) - Number(report.openingBalance)),
+                closingBalance: formatRupees(report.closingBalance),
                 currency: 'INR',
                 normalBalanceSide: report.normalBalanceSide
             }
@@ -294,8 +295,8 @@ export class LedgerEntryService {
             actorId: entry.actorId || 'system',
             lines: entry.lines?.map((l: any) => ({
                 accountId: l.accountId,
-                amount: (Math.abs(Number(l.amount)) / 100).toFixed(2),
-                type: BigInt(Math.round(Number(l.amount))) > 0n ? 'DEBIT' : 'CREDIT',
+                amount: Math.abs(toRupeesFromLedger(l.amount)).toFixed(2),
+                type: Number(l.amount) > 0 ? 'DEBIT' : 'CREDIT',
             })) || [],
         };
     }
@@ -334,7 +335,7 @@ export class LedgerEntryService {
 
     private static formatBigInts(obj: any): any {
         if (obj === null || obj === undefined) return obj;
-        if (typeof obj === 'bigint') return `₹ ${(Number(obj) / 100).toFixed(2)}`;
+        if (typeof obj === 'bigint') return `₹ ${toRupeesFromLedger(obj).toFixed(2)}`;
         if (Array.isArray(obj)) return obj.map(v => this.formatBigInts(v));
         if (typeof obj === 'object') {
             const newObj: any = {};

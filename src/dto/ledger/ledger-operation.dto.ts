@@ -27,6 +27,7 @@ export const CreateLedgerOperationSchema = z.object({
   accountType: z.enum(["PAYIN", "PAYOUT"]).optional(),
   targetAccountType: z.enum(["PAYIN", "PAYOUT"]).optional(),
   counterparty: z.enum(["WORLD", "INCOME"]).optional(),
+  accountId: z.string().optional(),
   bankAccountId: z.string().optional(),
   metadata: z.record(z.any()).optional(),
   fromDetails: z.record(z.any()).optional(),

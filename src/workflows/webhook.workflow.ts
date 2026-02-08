@@ -7,6 +7,7 @@ import { PaymentLedgerService } from "@/services/payment/payment-ledger.service"
 import axios from "axios";
 import crypto from "crypto";
 import { decryptSecret } from "@/utils/secret.util";
+import { toDisplayAmount } from "@/utils/money.util";
 
 export class WebhookWorkflow {
     async execute(type: "PAYIN" | "PAYOUT", providerId: string, legalEntityId: string, payload: any) {
@@ -51,7 +52,7 @@ export class WebhookWorkflow {
                 transaction.events.push({ type: "WEBHOOK_FAILED", timestamp: getISTDate(), payload: result });
 
                 if (type === "PAYOUT") {
-                    await PaymentLedgerService.rollbackPayout(transaction);
+                    await PaymentLedgerService.voidPayout(transaction);
                 }
             }
 
@@ -81,7 +82,7 @@ export class WebhookWorkflow {
         const basePayload = {
             orderId: transaction.orderId,
             transactionId: transaction.id,
-            amount: transaction.amount,
+            amount: toDisplayAmount(transaction.amount),
             status: transaction.status,
             utr: transaction.utr,
             type: transaction.type,
@@ -97,7 +98,7 @@ export class WebhookWorkflow {
             if (apiSecret) {
                 // Legacy hash in body (amount|currency|orderId|secret)
                 const currency = transaction.currency || "INR";
-                const legacyString = `${transaction.amount}|${currency}|${transaction.orderId}|${apiSecret}`;
+                const legacyString = `${basePayload.amount}|${currency}|${transaction.orderId}|${apiSecret}`;
                 const legacyHash = crypto.createHmac("sha256", apiSecret).update(legacyString).digest("hex");
                 payload = { ...basePayload, currency, hash: legacyHash };
 

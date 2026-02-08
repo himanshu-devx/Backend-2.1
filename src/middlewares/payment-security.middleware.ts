@@ -5,6 +5,7 @@ import { Forbidden, Unauthorized, BadRequest } from "@/utils/error";
 import { logger } from "@/infra/logger-instance";
 import crypto from "crypto";
 import { decryptSecret, looksLikeArgon2Hash } from "@/utils/secret.util";
+import { ENV } from "@/config/env";
 
 export const paymentSecurityMiddleware = (
     type: "PAYIN" | "PAYOUT" | "STATUS",
@@ -93,9 +94,31 @@ export const paymentSecurityMiddleware = (
     // Status checks might use Payin whitelist or global panel whitelist, let's use Payin for now or a generic API whitelist
 
     if (isWhitelistEnabled) {
-        if (ip !== "127.0.0.1" && ip !== "::1" && !ipWhitelist.includes(ip)) {
-            logger.warn(`[PaymentSecurity] Blocked IP ${ip} for Merchant ${merchantId}`);
-            throw Forbidden("IP Not Whitelisted");
+        // Domain-Based Bypass (Dashboard / Frontend)
+        const origin = c.req.header("origin") || c.req.header("referer");
+        const trustedFrontend = ENV.FRONTEND_URL || "http://localhost:3000";
+        let isTrustedOrigin = false;
+
+        if (origin) {
+            // Simple check: does origin start with trusted URL?
+            // E.g. origin: http://localhost:3000, referer: http://localhost:3000/payin
+            if (origin.startsWith(trustedFrontend)) {
+                isTrustedOrigin = true;
+            }
+            // Allow localhost in dev/test explicitly if not set in trustedFrontend
+            if ((ENV.NODE_ENV === "development" || ENV.NODE_ENV === "test") && origin.includes("localhost")) {
+                isTrustedOrigin = true;
+            }
+        }
+
+        if (isTrustedOrigin) {
+            logger.info(`[PaymentSecurity] IP Whitelist Bypassed for Dashboard Origin: ${origin} (Client IP: ${ip})`);
+        } else {
+            // Strict Check
+            if (ip !== "127.0.0.1" && ip !== "::1" && !ipWhitelist.includes(ip)) {
+                logger.warn(`[PaymentSecurity] Blocked IP ${ip} for Merchant ${merchantId} (Origin: ${origin})`);
+                throw Forbidden("IP Not Whitelisted");
+            }
         }
     }
 

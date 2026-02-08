@@ -144,3 +144,58 @@ export const createLedgerOperation = async (c: Context) => {
     const result = await LedgerOperationService.createOperation(body, actor);
     return c.json({ success: true, data: result });
 };
+
+/**
+ * GET /api/admin/ledger/operations/:entityType
+ * Get available operations for a specific entity type
+ */
+export const getOperationsByEntityType = async (c: Context) => {
+    try {
+        const entityType = c.req.param('entityType')?.toUpperCase();
+
+        if (!entityType) {
+            return c.json({ success: false, message: 'Entity type is required' }, 400);
+        }
+
+        const validEntityTypes = ['MERCHANT', 'PROVIDER', 'LEGAL_ENTITY', 'INCOME'];
+        if (!validEntityTypes.includes(entityType)) {
+            return c.json({
+                success: false,
+                message: `Invalid entity type. Must be one of: ${validEntityTypes.join(', ')}`
+            }, 400);
+        }
+
+        const { getOperationsByEntityType: getOps } = await import('@/services/ledger/ledger-operation-metadata.service');
+        const { accountType } = c.req.query();
+        const operations = getOps(entityType as any, accountType);
+
+        return c.json({
+            success: true,
+            data: {
+                entityType,
+                operations,
+                count: operations.length
+            }
+        });
+    } catch (error: any) {
+        return c.json({ success: false, message: 'Failed to fetch operations', error: error.message }, 500);
+    }
+};
+
+/**
+ * GET /api/admin/ledger/operations
+ * Get all entity types with their available operations
+ */
+export const getAllOperations = async (c: Context) => {
+    try {
+        const { getAllEntityTypes } = await import('@/services/ledger/ledger-operation-metadata.service');
+        const entityTypes = getAllEntityTypes();
+
+        return c.json({
+            success: true,
+            data: entityTypes
+        });
+    } catch (error: any) {
+        return c.json({ success: false, message: 'Failed to fetch all operations', error: error.message }, 500);
+    }
+};

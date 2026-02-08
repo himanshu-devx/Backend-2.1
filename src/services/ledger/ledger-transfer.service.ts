@@ -20,6 +20,7 @@ import {
   CreateLedgerTransferDTO,
   LedgerAccountRefDTO,
 } from "@/dto/ledger/ledger-transfer.dto";
+import { mapTransactionAmountsToDisplay, toStorageAmount } from "@/utils/money.util";
 
 type ActorContext = {
   id: string;
@@ -98,6 +99,7 @@ export class LedgerTransferService {
     data: CreateLedgerTransferDTO,
     actor: ActorContext
   ) {
+    const amountStored = toStorageAmount(data.amount);
     const fromAccountId = await this.resolveAccountId(data.from);
     const toAccountId = await this.resolveAccountId(data.to);
 
@@ -161,6 +163,11 @@ export class LedgerTransferService {
           : undefined);
     }
 
+    const party = data.party ? { ...data.party } : { type: TransactionPartyType.SYSTEM };
+    if ("bankAccountId" in party) {
+      delete (party as any).bankAccountId;
+    }
+
     const transaction = new TransactionModel({
       id: txId,
       type: data.type ?? TransactionType.INTERNAL_TRANSFER,
@@ -168,8 +175,8 @@ export class LedgerTransferService {
         data.status === "PENDING"
           ? TransactionStatus.PENDING
           : TransactionStatus.SUCCESS,
-      amount: data.amount,
-      netAmount: data.amount,
+      amount: amountStored,
+      netAmount: amountStored,
       currency: data.currency || "INR",
       orderId,
       merchantId,
@@ -179,7 +186,7 @@ export class LedgerTransferService {
       utr: data.utr,
       paymentMode: data.paymentMode,
       remarks: data.remarks ?? data.narration,
-      party: data.party ?? { type: TransactionPartyType.SYSTEM },
+      party,
       isBackDated,
       insertedDate: isBackDated ? valueDate : undefined,
       meta: {
@@ -230,8 +237,8 @@ export class LedgerTransferService {
           fromDetails: data.fromDetails,
           toDetails: data.toDetails,
         },
-        debits: [{ accountId: fromAccountId, amount: data.amount as any }],
-        credits: [{ accountId: toAccountId, amount: data.amount as any }],
+        debits: [{ accountId: fromAccountId, amount: amountStored as any }],
+        credits: [{ accountId: toAccountId, amount: amountStored as any }],
         status: data.status ?? "POSTED",
         actorId: actor.email || actor.id || "system",
       });
@@ -255,7 +262,7 @@ export class LedgerTransferService {
       await transaction.save();
 
       return {
-        transaction,
+        transaction: mapTransactionAmountsToDisplay(transaction.toObject ? transaction.toObject() : transaction),
         ledgerEntryId: entryId,
       };
     } catch (error: any) {

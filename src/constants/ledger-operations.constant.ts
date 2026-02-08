@@ -4,12 +4,9 @@ export const LEDGER_OPERATION = {
   MERCHANT_SETTLEMENT_PAYOUT: "MERCHANT_SETTLEMENT_PAYOUT",
   MERCHANT_SETTLEMENT_BANK: "MERCHANT_SETTLEMENT_BANK",
   MERCHANT_DEPOSIT: "MERCHANT_DEPOSIT",
-  MERCHANT_WITHDRAWAL: "MERCHANT_WITHDRAWAL",
-  MERCHANT_DEDUCT: "MERCHANT_DEDUCT",
-  MERCHANT_REFUND: "MERCHANT_REFUND",
   MERCHANT_HOLD: "MERCHANT_HOLD",
   MERCHANT_RELEASE: "MERCHANT_RELEASE",
-  MERCHANT_FEES: "MERCHANT_FEES",
+
   INCOME_SETTLEMENT_TO_MERCHANT: "INCOME_SETTLEMENT_TO_MERCHANT",
 
   LEGAL_ENTITY_SETTLEMENT: "LEGAL_ENTITY_SETTLEMENT",
@@ -50,21 +47,7 @@ export const LEDGER_OPERATION_META: Record<
     required: ["merchantId"],
     optional: ["bankAccountId", "valueDate", "metadata", "utr", "remarks"],
   },
-  MERCHANT_WITHDRAWAL: {
-    description: "Merchant PAYIN/PAYOUT -> WORLD (withdrawal)",
-    required: ["merchantId"],
-    optional: ["bankAccountId", "accountType", "valueDate", "metadata", "utr"],
-  },
-  MERCHANT_DEDUCT: {
-    description: "Merchant PAYIN/PAYOUT -> WORLD (manual deduction)",
-    required: ["merchantId"],
-    optional: ["accountType", "valueDate", "metadata", "utr"],
-  },
-  MERCHANT_REFUND: {
-    description: "Merchant PAYIN/PAYOUT -> WORLD (refund outflow)",
-    required: ["merchantId"],
-    optional: ["accountType", "valueDate", "metadata", "utr"],
-  },
+
   MERCHANT_HOLD: {
     description: "Merchant PAYIN/PAYOUT -> Merchant HOLD",
     required: ["merchantId"],
@@ -75,11 +58,7 @@ export const LEDGER_OPERATION_META: Record<
     required: ["merchantId"],
     optional: ["accountType", "valueDate", "metadata", "utr"],
   },
-  MERCHANT_FEES: {
-    description: "Merchant PAYIN/PAYOUT -> INCOME (manual fee charge)",
-    required: ["merchantId"],
-    optional: ["accountType", "valueDate", "metadata", "utr"],
-  },
+
   INCOME_SETTLEMENT_TO_MERCHANT: {
     description: "INCOME -> Merchant PAYIN/PAYOUT",
     required: ["merchantId"],
@@ -129,12 +108,8 @@ export const LEDGER_OPERATION_DEFAULT_TXN: Record<
   MERCHANT_SETTLEMENT_PAYOUT: TransactionType.MERCHANT_SETTLEMENT,
   MERCHANT_SETTLEMENT_BANK: TransactionType.MERCHANT_BANK_SETTLEMENT,
   MERCHANT_DEPOSIT: TransactionType.MERCHANT_DEPOSIT,
-  MERCHANT_WITHDRAWAL: TransactionType.MERCHANT_WITHDRAWAL,
-  MERCHANT_DEDUCT: TransactionType.MERCHANT_DEDUCT,
-  MERCHANT_REFUND: TransactionType.MERCHANT_REFUND,
   MERCHANT_HOLD: TransactionType.MERCHANT_HOLD,
   MERCHANT_RELEASE: TransactionType.MERCHANT_RELEASE,
-  MERCHANT_FEES: TransactionType.MERCHANT_FEES,
   INCOME_SETTLEMENT_TO_MERCHANT: TransactionType.MERCHANT_INCOME_SETTLEMENT,
   LEGAL_ENTITY_SETTLEMENT: TransactionType.LEGAL_ENTITY_SETTLEMENT,
   LEGAL_ENTITY_DEPOSIT: TransactionType.LEGAL_ENTITY_DEPOSIT,
@@ -143,4 +118,20 @@ export const LEDGER_OPERATION_DEFAULT_TXN: Record<
   PLE_DEPOSIT: TransactionType.PLE_DEPOSIT,
   PLE_EXPENSE_SETTLEMENT: TransactionType.PLE_EXPENSE_SETTLEMENT,
   PLE_EXPENSE_CHARGE: TransactionType.PLE_EXPENSE_CHARGE,
+};
+
+export const OPERATION_ACCOUNT_SCOPES: Record<LedgerOperationType, string[]> = {
+  [LEDGER_OPERATION.MERCHANT_SETTLEMENT_PAYOUT]: ["PAYIN", "PAYOUT"],
+  [LEDGER_OPERATION.MERCHANT_SETTLEMENT_BANK]: ["PAYIN"],
+  [LEDGER_OPERATION.MERCHANT_DEPOSIT]: ["PAYOUT"],
+  [LEDGER_OPERATION.MERCHANT_HOLD]: ["PAYIN", "PAYOUT"],
+  [LEDGER_OPERATION.MERCHANT_RELEASE]: ["PAYIN", "PAYOUT"],
+  [LEDGER_OPERATION.INCOME_SETTLEMENT_TO_MERCHANT]: ["PAYIN", "PAYOUT"],
+  [LEDGER_OPERATION.PLE_SETTLEMENT]: ["PAYIN"],
+  [LEDGER_OPERATION.PLE_DEPOSIT]: ["PAYOUT"],
+  [LEDGER_OPERATION.PLE_EXPENSE_SETTLEMENT]: ["EXPENSE"],
+  [LEDGER_OPERATION.PLE_EXPENSE_CHARGE]: ["EXPENSE"],
+  [LEDGER_OPERATION.LEGAL_ENTITY_SETTLEMENT]: ["PAYIN"],
+  [LEDGER_OPERATION.LEGAL_ENTITY_DEPOSIT]: ["PAYOUT"],
+  [LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT]: ["BANK"],
 };

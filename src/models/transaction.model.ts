@@ -39,6 +39,7 @@ export interface TransactionParty {
   bankName?: string;
   ifscCode?: string;
   upiId?: string;
+  bankAccountId?: string;
   [key: string]: any;
 }
 
@@ -181,6 +182,7 @@ const TransactionSchema = new Schema<TransactionDocument>(
           bankName: String,
           ifscCode: String,
           upiId: String,
+          bankAccountId: String,
         },
         { _id: false }
       ),

@@ -53,7 +53,7 @@ export class LedgerService {
           maxBatchSize: 200,
         },
         ledger: {
-          displayMode: 'raw',
+          displayMode: 'normalized',
         },
       });
     } catch (err: any) {

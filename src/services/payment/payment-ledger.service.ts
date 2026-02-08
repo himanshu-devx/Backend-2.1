@@ -8,6 +8,7 @@ import { getISTDate } from "@/utils/date.util";
 export class PaymentLedgerService {
     /**
      * Finalize Payin: Move funds from Provider Asset to Merchant Liability
+     * Triggered via Webhook
      */
     static async processPayinCredit(transaction: TransactionDocument) {
         const merchantPayinAccountId = LedgerUtils.generateAccountId(
@@ -49,6 +50,7 @@ export class PaymentLedgerService {
             credits,
             status: "POSTED"
         });
+
         if (transaction?.meta?.set) {
             transaction.meta.set("ledgerEntryId", entryId);
         } else if (transaction?.meta) {
@@ -59,48 +61,76 @@ export class PaymentLedgerService {
     }
 
     /**
-     * Finalize Payout: Move funds from Merchant Hold to Provider Asset
+     * Initiate Payout: Reserve funds via PENDING ledger entry
+     * Debit: Merchant Payout (Liability) - reserve merchant funds
+     * Credit: Provider Payout (Asset) - provider will send funds
+     * Credit: Income - platform fees
      */
-    static async commitPayout(transaction: TransactionDocument) {
-        const holdId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.HOLD);
+    static async initiatePayout(transaction: TransactionDocument) {
+        const sourceId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYOUT);
         const providerSettlementId = LedgerUtils.generateAccountId(ENTITY_TYPE.PROVIDER, transaction.providerId!, AccountType.ASSET, ENTITY_ACCOUNT_TYPE.PAYOUT);
+        const platformIncomeId = LedgerUtils.generateAccountId(ENTITY_TYPE.INCOME, "INCOME", AccountType.INCOME, ENTITY_ACCOUNT_TYPE.INCOME);
+
+        const merchantFees = transaction.fees?.merchantFees;
+        const credits = [
+            { accountId: providerSettlementId, amount: transaction.amount as any } // Provider sends full amount to beneficiary
+        ];
+
+        // If including fees, we debit (amount + fees) from merchant, credit `amount` to provider, `fees` to income
+        // Logic: Net Amount deducted from Merchant = Amount + Fees
+        if (merchantFees && Number(merchantFees.total) > 0) {
+            credits.push({ accountId: platformIncomeId, amount: merchantFees.total as any });
+        }
 
         const entryId = await LedgerService.transfer({
-            narration: `Payout Commit: ${transaction.orderId}`,
+            narration: `Payout Initiated: ${transaction.orderId}`,
             externalRef: transaction.id,
             valueDate: getISTDate(),
-            debits: [{ accountId: holdId, amount: transaction.netAmount as any }],
-            credits: [{ accountId: providerSettlementId, amount: transaction.netAmount as any }],
-            status: "POSTED"
+            debits: [{ accountId: sourceId, amount: transaction.netAmount as any }], // Deduct total cost
+            credits: credits,
+            status: "PENDING"
         });
+
         if (transaction?.meta?.set) {
-            transaction.meta.set("ledgerCommitEntryId", entryId);
+            transaction.meta.set("ledgerEntryId", entryId);
         } else if (transaction?.meta) {
-            (transaction.meta as any).ledgerCommitEntryId = entryId;
+            (transaction.meta as any).ledgerEntryId = entryId;
         }
         await transaction.save();
         return entryId;
     }
 
     /**
-     * Rollback Payout: Move funds from Merchant Hold back to Merchant Payin
+     * Commit Payout: Mark PENDING entry as POSTED
      */
-    static async rollbackPayout(transaction: TransactionDocument) {
-        const sourceId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYIN);
-        const holdId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.HOLD);
+    static async commitPayout(transaction: TransactionDocument) {
+        const entryId = transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
+        if (!entryId) return; // No pending entry to commit
 
-        const entryId = await LedgerService.transfer({
-            narration: `Payout Rollback: ${transaction.orderId}`,
-            externalRef: transaction.id,
-            valueDate: getISTDate(),
-            debits: [{ accountId: holdId, amount: transaction.netAmount as any }],
-            credits: [{ accountId: sourceId, amount: transaction.netAmount as any }],
-            status: "POSTED"
-        });
+        await LedgerService.post(entryId);
+
         if (transaction?.meta?.set) {
-            transaction.meta.set("ledgerRollbackEntryId", entryId);
+            transaction.meta.set("ledgerExectued", true);
         } else if (transaction?.meta) {
-            (transaction.meta as any).ledgerRollbackEntryId = entryId;
+            (transaction.meta as any).ledgerExecuted = true;
+        }
+        await transaction.save();
+        return entryId;
+    }
+
+    /**
+     * Void Payout: Mark PENDING entry as VOID (Releasing funds)
+     */
+    static async voidPayout(transaction: TransactionDocument) {
+        const entryId = transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
+        if (!entryId) return; // No pending entry to void
+
+        await LedgerService.void(entryId);
+
+        if (transaction?.meta?.set) {
+            transaction.meta.set("ledgerVoided", true);
+        } else if (transaction?.meta) {
+            (transaction.meta as any).ledgerVoided = true;
         }
         await transaction.save();
         return entryId;

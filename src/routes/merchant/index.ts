@@ -56,6 +56,12 @@ merchantRoutes.get(
 );
 
 merchantRoutes.get(
+  "/api-keys/secret",
+  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
+  handler(MerchantSelfController.getOwnApiSecret)
+);
+
+merchantRoutes.get(
   "/dashboard/stats",
   authorizeRoles([MERCHANT_ROLES.MERCHANT]),
   handler(MerchantSelfController.getDashboardStats)

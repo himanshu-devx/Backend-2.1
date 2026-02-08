@@ -160,6 +160,12 @@ export class MerchantManagementController {
     return respond(c, result);
   }
 
+  static async getApiSecret(c: Context) {
+    const id = c.req.param("id");
+    const result = await MerchantManagementService.getApiSecret(id);
+    return respond(c, result);
+  }
+
   static async toggleApiSecret(c: Context) {
     const id = c.req.param("id");
     const body = await c.req.json<{ enabled: boolean }>();

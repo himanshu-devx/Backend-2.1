@@ -9,6 +9,7 @@ import {
     LedgerAccountEntity,
 } from '@/constants/ledger.constant';
 import { LedgerUtils } from '@/utils/ledger.utils';
+import { toDisplayAmountFromLedger } from '@/utils/money.util';
 
 export class AccountService {
 
@@ -279,7 +280,9 @@ export class AccountService {
             const balances: Record<string, string> = {};
 
             for (const account of accounts) {
-                balances[account.id] = (account as any).balance || '0';
+                const rawBalance = (account as any).ledgerBalance ?? 0;
+                const rupeeBalance = toDisplayAmountFromLedger(rawBalance);
+                balances[account.id] = rupeeBalance.toFixed(2);
             }
 
             return balances;

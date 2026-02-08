@@ -51,6 +51,7 @@ export const TransactionPartySchema = z
     bankName: z.string().optional(),
     ifscCode: z.string().optional(),
     upiId: z.string().optional(),
+    bankAccountId: z.string().optional(),
   })
   .passthrough();
 

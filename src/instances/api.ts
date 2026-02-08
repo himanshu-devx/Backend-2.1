@@ -1,4 +1,4 @@
-console.log("API INSTANCE LOADED");
+console.log("API INSTANCE LOADED"); // Trigger Restart
 import { buildApp } from "@/app";
 import { bootstrap } from "@/bootstrap";
 import { handler } from "@/utils/handler";

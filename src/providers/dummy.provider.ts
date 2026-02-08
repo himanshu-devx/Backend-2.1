@@ -25,7 +25,7 @@ export class DummyProvider extends BaseProvider {
             type: 'payin',
             success: true,
             status: 'PENDING',
-            message: 'Payment Intent Generated',
+            message: 'Payment Initiated (Dummy)',
             transactionId: req.transactionId,
             providerTransactionId: uniqueRef,
             amount: req.amount,
@@ -65,8 +65,8 @@ export class DummyProvider extends BaseProvider {
             amount: req.amount
         };
 
-        // Simulate async result (90% success, 10% failure)
-        const outcome = Math.random() > 0.1 ? 'SUCCESS' : 'FAILED';
+        // Simulate async result (Always SUCCESS for test suite consistency)
+        const outcome = 'SUCCESS';
 
         // this.dispatchDelayedWebhook({
         //     type: 'PAYOUT',

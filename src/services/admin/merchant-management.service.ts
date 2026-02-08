@@ -16,7 +16,8 @@ import { MerchantDocument } from "@/models/merchant.model";
 import crypto from "crypto";
 import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { TransactionType } from "@/constants/transaction.constant";
-import { encryptSecret } from "@/utils/secret.util";
+import { encryptSecret, decryptSecret } from "@/utils/secret.util";
+import { toDisplayAmount } from "@/utils/money.util";
 
 export class MerchantManagementService {
   static async getMerchantList(
@@ -561,6 +562,38 @@ export class MerchantManagementService {
     return ok({ apiSecret: newSecret });
   }
 
+  static async getApiSecret(
+    merchantId: string
+  ): Promise<Result<{ apiSecret: string; apiSecretUpdatedAt: Date }, AppError>> {
+    const merchant = await merchantRepository.findById(merchantId);
+    if (!merchant) return err(NotFound("Merchant not found"));
+
+    if (!merchant.apiSecretEnabled) {
+      return ok({
+        apiSecret: "",
+        apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || new Date(),
+      });
+    }
+
+    if (!merchant.apiSecretEncrypted) {
+      return ok({
+        apiSecret: "",
+        apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || new Date(),
+      });
+    }
+
+    const secret = decryptSecret(merchant.apiSecretEncrypted);
+    // If decryption fails or returns null, handle gracefully
+    if (!secret) {
+      return err(new AppError("Failed to decrypt API secret", { status: 500 }));
+    }
+
+    return ok({
+      apiSecret: secret,
+      apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || new Date(),
+    });
+  }
+
   static async toggleApiSecret(
     merchantId: string,
     enable: boolean,
@@ -746,12 +779,12 @@ export class MerchantManagementService {
     return ok({
       onboardedAt: merchant.createdAt,
       firstTransactionAt: firstTxn?.createdAt,
-      totalVolume: volumeAgg[0]?.total || 0,
+      totalVolume: toDisplayAmount(volumeAgg[0]?.total || 0),
       lastTransactions: lastTxns.map((t) => ({
         id: t.id,
         createdAt: t.createdAt,
         type: t.type,
-        amount: t.amount,
+        amount: toDisplayAmount(t.amount),
         status: t.status,
         currency: t.currency,
       })),

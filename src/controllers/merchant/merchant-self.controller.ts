@@ -37,6 +37,13 @@ export class MerchantSelfController {
     return respond(c, result);
   }
 
+  static async getOwnApiSecret(c: Context) {
+    const merchantId = c.get("id");
+    if (!merchantId) return respond(c, err(Unauthorized("Not authenticated")));
+    const result = await MerchantSelfService.getOwnApiSecret(merchantId);
+    return respond(c, result);
+  }
+
   // --- Actions ---
 
   static async updateCallbackUrl(c: Context) {

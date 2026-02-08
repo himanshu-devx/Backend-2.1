@@ -14,6 +14,8 @@ import { PaymentRoutingService } from "@/services/payment/payment-routing.servic
 import { ProviderClient } from "@/services/provider/provider-client.service";
 import { TpsService } from "@/services/common/tps.service";
 import { ENV } from "@/config/env";
+import { logger } from "@/infra/logger-instance";
+import { mapFeeDetailToStorage, toStorageAmount } from "@/utils/money.util";
 
 export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
     private merchantFees: any;
@@ -58,12 +60,16 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
 
     protected async persist(dto: InitiatePayoutDto, gatewayResult?: any): Promise<void> {
         const netAmount = this.round(dto.amount + this.merchantFees.total);
+        const amountStored = toStorageAmount(dto.amount);
+        const netAmountStored = toStorageAmount(netAmount);
+        const merchantFeesStored = mapFeeDetailToStorage(this.merchantFees);
+        const providerFeesStored = mapFeeDetailToStorage(this.providerFees);
 
         this.transaction = new TransactionModel({
             merchantId: this.merchant.id,
             type: TransactionType.PAYOUT,
-            amount: dto.amount,
-            netAmount: netAmount,
+            amount: amountStored,
+            netAmount: netAmountStored,
             currency: "INR",
             paymentMode: dto.paymentMode,
             remarks: dto.remarks,
@@ -79,9 +85,9 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
                 bankName: dto.beneficiaryBankName,
             },
             status: TransactionStatus.PENDING,
-            fees: { merchantFees: this.merchantFees, providerFees: this.providerFees },
+            fees: { merchantFees: merchantFeesStored, providerFees: providerFeesStored },
             meta: { ip: this.requestIp },
-            events: [{ type: "WORKFLOW_STARTED", timestamp: getISTDate() }],
+            events: [{ type: "WORKFLOW_STARTED", timestamp: getISTDate(), payload: dto }],
         });
 
         await this.transaction.save();
@@ -89,22 +95,12 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
 
     protected async preExecute(dto: InitiatePayoutDto): Promise<void> {
         try {
-            // LEDGER HOLD
-            const sourceId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, this.merchant.id, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYIN);
-            const destinationId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, this.merchant.id, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.HOLD);
-
-            const holdEntryId = await LedgerService.transfer({
-                narration: `Payout: ${this.transaction.orderId}`,
-                externalRef: this.transaction.id,
-                valueDate: getISTDate(),
-                debits: [{ accountId: sourceId, amount: this.transaction.netAmount as any }],
-                credits: [{ accountId: destinationId, amount: this.transaction.netAmount as any }],
-                status: "PENDING"
-            });
-
-            this.transaction.meta.set("ledgerHoldEntryId", holdEntryId);
+            // LEDGER PENDING
+            const entryId = await PaymentLedgerService.initiatePayout(this.transaction);
+            this.transaction.meta.set("ledgerPendingEntryId", entryId);
             await this.transaction.save();
         } catch (error: any) {
+            logger.error(`[PayoutWorkflow] Ledger Initiate Failed: ${error.message}`, error);
             throw new PaymentError(PaymentErrorCode.LEDGER_HOLD_FAILED, {
                 originalError: error.message
             });
@@ -127,7 +123,10 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
                     this.transaction.providerId = this.routing.providerId;
                     this.transaction.legalEntityId = this.routing.legalEntityId;
                     this.transaction.providerLegalEntityId = channel.id;
-                    this.transaction.fees = { merchantFees: this.merchantFees, providerFees: this.providerFees };
+                    this.transaction.fees = {
+                        merchantFees: mapFeeDetailToStorage(this.merchantFees),
+                        providerFees: mapFeeDetailToStorage(this.providerFees)
+                    };
                     await this.transaction.save();
                 }
 
@@ -174,10 +173,15 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
             this.transaction.utr = result.utr;
             this.transaction.events.push({ type: "PROVIDER_INITIATED", timestamp: getISTDate(), payload: result });
 
-            if (this.transaction.status === TransactionStatus.SUCCESS) {
-                const entryId = await PaymentLedgerService.commitPayout(this.transaction);
-                this.transaction.meta.set("ledgerCommitEntryId", entryId);
-            }
+            // NOTE: We do NOT commit ledger here. Webhook will commit.
+            // If provider returns IMMEDIATE SUCCESS (e.g. Test/Dummy), we could commit here, 
+            // but for consistency with the requirement "Webhook comes -> Post Ledger", we wait.
+            // Exception: If provider explicitly says SUCCESS (not PENDING), we might want to Post.
+            // For now, adhering strictly to "Webhook -> Post". 
+            // BUT: If dummy provider returns success immediately and NO webhook is sent, we hang.
+            // Let's assume Dummy Provider sends webhook OR we need to poll.
+            // Based on requirements: "webhook come if succes then POST ledger".
+
             await this.transaction.save();
         } else {
             throw new Error(result.message || "Provider payout failed");
@@ -188,10 +192,9 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
         // Standard failure logic first
         await super.handleFailure(error);
 
-        // Payout specific: Rollback if hold was created
-        if (this.transaction && this.transaction.meta.get("ledgerHoldEntryId") && !this.transaction.meta.get("ledgerRollbackEntryId")) {
-            const entryId = await PaymentLedgerService.rollbackPayout(this.transaction);
-            this.transaction.meta.set("ledgerRollbackEntryId", entryId);
+        // Payout specific: Void if pending entry was created
+        if (this.transaction && this.transaction.meta.get("ledgerPendingEntryId") && !this.transaction.meta.get("ledgerVoided")) {
+            await PaymentLedgerService.voidPayout(this.transaction);
             await this.transaction.save();
         }
     }

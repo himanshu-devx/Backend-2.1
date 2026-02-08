@@ -4,6 +4,7 @@ import { bootstrap } from "@/bootstrap";
 import { handler } from "@/utils/handler";
 import { ENV } from "@/config/env";
 import paymentRoutes from "@/routes/payment/payment.routes";
+import webhookRoutes from "@/routes/payment/webhook.routes";
 import { rateLimiter } from "@/middlewares/rate-limiter";
 import { serve } from "@hono/node-server";
 
@@ -15,6 +16,9 @@ app.use("*", rateLimiter(ENV.RATE_LIMIT_MAX, ENV.RATE_LIMIT_WINDOW));
 
 // Mount Payment Routes
 app.route("/api/payment", paymentRoutes);
+
+// Mount Webhook Routes (CRITICAL: webhooks must update the same ledger as payment operations)
+app.route("/webhook", webhookRoutes);
 
 // Health Check
 app.get(

@@ -66,4 +66,19 @@ adminLedgerRoutes.get(
     handler(ledgerController.getBalanceSheet)
 );
 
+// Get all operations grouped by entity type
+adminLedgerRoutes.get(
+    '/operations',
+    authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),
+    handler(ledgerController.getAllOperations)
+);
+
+// Get operations for a specific entity type
+adminLedgerRoutes.get(
+    '/operations/:entityType',
+    authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),
+    handler(ledgerController.getOperationsByEntityType)
+);
+
+
 export default adminLedgerRoutes;

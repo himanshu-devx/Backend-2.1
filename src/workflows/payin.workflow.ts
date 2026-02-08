@@ -11,6 +11,8 @@ import { PaymentError, PaymentErrorCode, mapToPaymentError } from "@/utils/payme
 import { generateCustomId } from "@/utils/id.util";
 import { ProviderClient } from "@/services/provider/provider-client.service";
 import { TpsService } from "@/services/common/tps.service";
+import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
+import { mapFeeDetailToStorage, toDisplayAmount, toStorageAmount } from "@/utils/money.util";
 
 export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
     private merchantFees: any;
@@ -66,13 +68,17 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
 
     protected async persist(dto: InitiatePayinDto, gatewayResult: any): Promise<void> {
         const netAmount = this.round(dto.amount - this.merchantFees.total);
+        const amountStored = toStorageAmount(dto.amount);
+        const netAmountStored = toStorageAmount(netAmount);
+        const merchantFeesStored = mapFeeDetailToStorage(this.merchantFees);
+        const providerFeesStored = mapFeeDetailToStorage(this.providerFees);
 
         this.transaction = new TransactionModel({
             id: this.generatedId,
             merchantId: this.merchant.id,
             type: TransactionType.PAYIN,
-            amount: dto.amount,
-            netAmount: netAmount,
+            amount: amountStored,
+            netAmount: netAmountStored,
             currency: "INR",
             paymentMode: dto.paymentMode,
             remarks: dto.remarks,
@@ -87,11 +93,11 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
                 email: dto.customerEmail,
                 phone: dto.customerPhone,
             },
-            status: TransactionStatus.PENDING,
-            fees: { merchantFees: this.merchantFees, providerFees: this.providerFees },
+            status: (gatewayResult?.status === 'SUCCESS') ? TransactionStatus.SUCCESS : TransactionStatus.PENDING,
+            fees: { merchantFees: merchantFeesStored, providerFees: providerFeesStored },
             meta: { ip: this.requestIp },
             events: [
-                { type: "WORKFLOW_STARTED", timestamp: getISTDate() },
+                { type: "WORKFLOW_STARTED", timestamp: getISTDate(), payload: dto },
                 { type: "PROVIDER_INITIATED", timestamp: getISTDate(), payload: gatewayResult }
             ],
         });
@@ -155,7 +161,10 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
     }
 
     protected async postExecute(result: any): Promise<void> {
-        // In Provider-First mode, persist is called before postExecute if gateway succeeds.
+        if (result.success && result.status === 'SUCCESS') {
+            const entryId = await PaymentLedgerService.processPayinCredit(this.transaction);
+            logger.info(`[PayinWorkflow] Ledger Credited: ${entryId}`);
+        }
     }
 
     protected formatResponse(result: any): any {
@@ -163,8 +172,8 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
             orderId: this.transaction.orderId,
             transactionId: this.generatedId,
             paymentUrl: result.result,
-            amount: this.transaction.amount,
-            status: "PENDING"
+            amount: toDisplayAmount(this.transaction.amount),
+            status: this.transaction.status
         };
     }
 
