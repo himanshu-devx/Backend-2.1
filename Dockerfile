@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
   g++ \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json* tsconfig.build.json tsconfig.json ./
+COPY package.json package-lock.json* tsconfig.json ./
 RUN npm install
 
 COPY src ./src
