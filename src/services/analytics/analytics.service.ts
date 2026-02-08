@@ -6,7 +6,7 @@ import { LedgerService } from "@/services/ledger/ledger.service";
 import { LedgerUtils } from "@/utils/ledger.utils";
 import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
 import { AccountType } from "fintech-ledger";
-import { toDisplayAmount } from "@/utils/money.util";
+import { toDisplayAmount, toDisplayAmountFromLedger } from "@/utils/money.util";
 
 
 export interface AnalyticsStats {
@@ -473,10 +473,10 @@ export class AnalyticsService {
         ]);
 
         // Payin Balance (Money In)
-        totalPayinBalance += parseFloat(payinBal);
+        totalPayinBalance += toDisplayAmountFromLedger(payinBal);
 
         // Payout Balance (Money available for Payout)
-        totalPayoutBalance += parseFloat(payoutBal);
+        totalPayoutBalance += toDisplayAmountFromLedger(payoutBal);
       }
 
       // Convert to Absolute for Liability Accounts
