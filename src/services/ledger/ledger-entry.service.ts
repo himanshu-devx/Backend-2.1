@@ -109,6 +109,19 @@ export class LedgerEntryService {
 
         const fetchLimit = validatedLimit * validatedPage + 100;
         const allEntries = await LedgerService.getEntries(accountId, { limit: fetchLimit });
+        const normalSide = resolveNormalSide(accountId);
+
+        const balanceByEntryId = new Map<string, any>();
+        try {
+            const statementLines = await new AccountStatement().getStatement(accountId, fetchLimit);
+            for (const line of statementLines) {
+                if (line?.entryId) {
+                    balanceByEntryId.set(line.entryId, line.balanceAfter);
+                }
+            }
+        } catch {
+            // If statement generation fails, entries still render without balances.
+        }
 
         let filteredEntries = allEntries;
 
@@ -130,9 +143,10 @@ export class LedgerEntryService {
             filteredEntries = filteredEntries.filter((entry: any) => {
                 const line = entry.lines?.find((l: any) => l.accountId === accountId);
                 if (!line) return false;
-                const amt = Number(line.amount);
+                const amt = toRupeesFromLedger(line.amount);
                 if (Number.isNaN(amt)) return false;
-                return type === 'DEBIT' ? amt > 0 : amt < 0;
+                const side = classifySide(amt, normalSide);
+                return side === type;
             });
         }
 
@@ -174,26 +188,35 @@ export class LedgerEntryService {
             const line = entry.lines?.find((l: any) => l.accountId === accountId);
             const rawVal = line?.amount || '0';
             const amountValue = toRupeesFromLedger(rawVal);
+            const side = classifySide(amountValue, normalSide);
+            const balanceAfter = balanceByEntryId.get(entry.id);
+            const runningBalance = balanceAfter !== undefined ? formatRupees(balanceAfter) : undefined;
 
             return {
                 id: entry.id,
                 postedAt: getShiftedISTDate(entry.postedAt || entry.createdAt),
                 amount: `₹ ${Math.abs(amountValue).toFixed(2)}`,
                 currency: 'INR',
-                type: amountValue > 0 ? 'DEBIT' : 'CREDIT',
+                type: side,
                 status: entry.status,
                 description: entry.description || '',
                 metadata: entry.metadata || {},
+                runningBalance,
+                balance: runningBalance,
                 relatedEntries: entry.lines
                     ?.filter((l: any) => l.accountId !== accountId)
                     .map((l: any) => {
                         const rVal = l.amount || '0';
                         const rAmt = toRupeesFromLedger(rVal);
+                        const relatedSide = classifySide(
+                            rAmt,
+                            resolveNormalSide(l.accountId)
+                        );
                         return {
                             accountId: l.accountId,
                             amount: `₹ ${Math.abs(rAmt).toFixed(2)}`,
                             currency: 'INR',
-                            type: rAmt > 0 ? 'DEBIT' : 'CREDIT',
+                            type: relatedSide,
                         };
                     }) || [],
             };
@@ -218,6 +241,7 @@ export class LedgerEntryService {
     static async getAccountStatement(accountId: string, options: { startDate?: string; endDate?: string; limit?: number } = {}) {
         const { getTodayRangeIST, parseDateRangeToIST } = await import('@/utils/date.util');
         const limit = options.limit || 100;
+        const normalSide = resolveNormalSide(accountId);
 
         let start: Date;
         let end: Date;
@@ -245,11 +269,12 @@ export class LedgerEntryService {
             // For a merchant account (Liability):
             // CREDIT increases balance (Inflow), DEBIT decreases balance (Outflow)
             const amt = toRupeesFromLedger(line.rawAmount);
+            const side = classifySide(amt, normalSide);
             return {
                 date: getShiftedISTDate(line.date),
                 description: line.description,
-                debit: amt > 0 ? `₹ ${Math.abs(amt).toFixed(2)}` : '₹ 0.00',
-                credit: amt < 0 ? `₹ ${Math.abs(amt).toFixed(2)}` : '₹ 0.00',
+                debit: side === 'DEBIT' ? `₹ ${Math.abs(amt).toFixed(2)}` : '₹ 0.00',
+                credit: side === 'CREDIT' ? `₹ ${Math.abs(amt).toFixed(2)}` : '₹ 0.00',
                 runningBalance: formatRupees(line.balanceAfter),
                 currency: 'INR',
                 entryId: line.entryId
@@ -321,7 +346,10 @@ export class LedgerEntryService {
             lines: entry.lines?.map((l: any) => ({
                 accountId: l.accountId,
                 amount: Math.abs(toRupeesFromLedger(l.amount)).toFixed(2),
-                type: Number(l.amount) > 0 ? 'DEBIT' : 'CREDIT',
+                normalBalanceSide: classifySide(
+                    toRupeesFromLedger(l.amount),
+                    resolveNormalSide(l.accountId)
+                ),
             })) || [],
         };
     }

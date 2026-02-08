@@ -9,6 +9,7 @@ const isPaise = () => String(getUnit()).toUpperCase() === "PAISE";
 const toNumber = (value: unknown): number | undefined => {
   if (value === null || value === undefined) return undefined;
   if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "bigint") return Number(value);
   if (typeof value === "string") {
     const parsed = Number(value);
     return Number.isNaN(parsed) ? undefined : parsed;
