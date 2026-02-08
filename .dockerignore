@@ -1,0 +1,7 @@
+node_modules
+libs/fintech-ledger/node_modules
+storage
+.git
+.env
+*.log
+dist

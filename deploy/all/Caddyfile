@@ -1,0 +1,24 @@
+{
+  email {$CADDY_EMAIL}
+  auto_https on
+}
+
+{$API_DOMAIN} {
+  encode zstd gzip
+  reverse_proxy api:4000 {
+    header_up -X-Forwarded-For
+    header_up -X-Real-IP
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Real-IP {remote_host}
+  }
+}
+
+{$PAYMENT_DOMAIN} {
+  encode zstd gzip
+  reverse_proxy payment:3000 {
+    header_up -X-Forwarded-For
+    header_up -X-Real-IP
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Real-IP {remote_host}
+  }
+}

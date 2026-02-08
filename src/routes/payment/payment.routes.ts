@@ -32,4 +32,18 @@ paymentRoutes.get(
     (c) => controller.checkStatus(c)
 );
 
+paymentRoutes.get(
+    "/payin/status/:orderId",
+    extractPaymentIp,
+    paymentSecurityMiddleware("PAYIN"),
+    (c) => controller.checkPayinStatus(c)
+);
+
+paymentRoutes.get(
+    "/payout/status/:orderId",
+    extractPaymentIp,
+    paymentSecurityMiddleware("PAYOUT"),
+    (c) => controller.checkPayoutStatus(c)
+);
+
 export default paymentRoutes;

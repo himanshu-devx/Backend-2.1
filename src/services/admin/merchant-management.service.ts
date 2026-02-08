@@ -596,7 +596,12 @@ export class MerchantManagementService {
 
   static async updateRouting(
     merchantId: string,
-    data: { payinRouting?: any; payoutRouting?: any },
+    data: {
+      payinRouting?: any;
+      payoutRouting?: any;
+      payinRoutingFallbacks?: any[];
+      payoutRoutingFallbacks?: any[];
+    },
     auditContext?: AuditContext
   ): Promise<Result<MerchantDocument, AppError>> {
     const merchant = await merchantRepository.findById(merchantId);
@@ -643,10 +648,24 @@ export class MerchantManagementService {
         throw BadRequest(`${type} Channel is not active for Payout`);
     };
 
+    const validateFallbacks = async (
+      fallbacks: Array<{ providerId: string; legalEntityId: string }>,
+      type: "Payin" | "Payout"
+    ) => {
+      if (!Array.isArray(fallbacks)) return;
+      for (const fb of fallbacks) {
+        await validateRouting(fb, type);
+      }
+    };
+
     try {
       if (data.payinRouting) await validateRouting(data.payinRouting, "Payin");
       if (data.payoutRouting)
         await validateRouting(data.payoutRouting, "Payout");
+      if (data.payinRoutingFallbacks)
+        await validateFallbacks(data.payinRoutingFallbacks, "Payin");
+      if (data.payoutRoutingFallbacks)
+        await validateFallbacks(data.payoutRoutingFallbacks, "Payout");
     } catch (error: any) {
       return err(error);
     }
@@ -654,11 +673,17 @@ export class MerchantManagementService {
     const previousValues = {
       payinRouting: merchant.payin.routing,
       payoutRouting: merchant.payout.routing,
+      payinRoutingFallbacks: merchant.payin.routingFallbacks,
+      payoutRoutingFallbacks: merchant.payout.routingFallbacks,
     };
 
     const updateData: any = {};
     if (data.payinRouting) updateData["payin.routing"] = data.payinRouting;
     if (data.payoutRouting) updateData["payout.routing"] = data.payoutRouting;
+    if (data.payinRoutingFallbacks)
+      updateData["payin.routingFallbacks"] = data.payinRoutingFallbacks;
+    if (data.payoutRoutingFallbacks)
+      updateData["payout.routingFallbacks"] = data.payoutRoutingFallbacks;
 
     const updatedMerchant = await merchantRepository.update(
       merchantId,

@@ -6,7 +6,10 @@ import { logger } from "@/infra/logger-instance";
 import crypto from "crypto";
 import { decryptSecret, looksLikeArgon2Hash } from "@/utils/secret.util";
 
-export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): MiddlewareHandler => async (c: Context, next: Next) => {
+export const paymentSecurityMiddleware = (
+    type: "PAYIN" | "PAYOUT" | "STATUS",
+    options: { skipSignature?: boolean } = {}
+): MiddlewareHandler => async (c: Context, next: Next) => {
 
     // 1. Headers Validation
     const merchantId = c.req.header("x-merchant-id");
@@ -96,7 +99,7 @@ export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): 
         }
     }
 
-    // 5. Signature Verification
+    // 5. Signature Verification (optional)
     const apiSecretEncrypted = merchant.apiSecretEncrypted;
 
     if (!apiSecretEncrypted) {
@@ -114,44 +117,44 @@ export const paymentSecurityMiddleware = (type: "PAYIN" | "PAYOUT" | "STATUS"): 
         throw Forbidden("Invalid API credentials. Please rotate API keys.");
     }
 
-    let isValid = false;
-    const safeEqual = (a: string, b: string) => {
-        const aBuf = Buffer.from(a);
-        const bBuf = Buffer.from(b);
-        if (aBuf.length !== bBuf.length) return false;
-        return crypto.timingSafeEqual(aBuf, bBuf);
-    };
+    if (!options.skipSignature) {
+        let isValid = false;
+        const safeEqual = (a: string, b: string) => {
+            const aBuf = Buffer.from(a);
+            const bBuf = Buffer.from(b);
+            if (aBuf.length !== bBuf.length) return false;
+            return crypto.timingSafeEqual(aBuf, bBuf);
+        };
 
-    // A. Check x-signature (New Standard: Body + Timeline)
-    if (signature && signature.length === 64) {
-        // We expect maybe a different format or just the hex.
-        // Let's standardise: HMAC-SHA256( rawBody + "|" + timestamp, secret )
-        const payloadString = rawBody + "|" + timestamp;
-        const computed = crypto.createHmac("sha256", apiSecret).update(payloadString).digest("hex");
+        // A. Check x-signature (New Standard: Body + Timeline)
+        if (signature && signature.length === 64) {
+            // Standard: HMAC-SHA256( rawBody + "|" + timestamp, secret )
+            const payloadString = rawBody + "|" + timestamp;
+            const computed = crypto.createHmac("sha256", apiSecret).update(payloadString).digest("hex");
 
-        if (safeEqual(computed, signature)) {
-            isValid = true;
-        } else {
-            logger.warn(`[PaymentSecurity] Invalid x-signature for ${merchantId}`);
+            if (safeEqual(computed, signature)) {
+                isValid = true;
+            } else {
+                logger.warn(`[PaymentSecurity] Invalid x-signature for ${merchantId}`);
+            }
         }
-    }
 
-    // B. Check body.hash (Legacy: amount|currency|orderId|secret)
-    if (!isValid && body && body.hash) {
-        const { amount, currency = "INR", orderId } = body;
-        // Legacy format likely used in current integrations
-        const dataString = `${amount}|${currency}|${orderId}|${apiSecret}`;
-        const computedLegacy = crypto.createHmac("sha256", apiSecret).update(dataString).digest("hex");
+        // B. Check body.hash (Legacy: amount|currency|orderId|secret)
+        if (!isValid && body && body.hash) {
+            const { amount, currency = "INR", orderId } = body;
+            const dataString = `${amount}|${currency}|${orderId}|${apiSecret}`;
+            const computedLegacy = crypto.createHmac("sha256", apiSecret).update(dataString).digest("hex");
 
-        if (safeEqual(computedLegacy, String(body.hash))) {
-            isValid = true;
-        } else {
-            logger.warn(`[PaymentSecurity] Invalid legacy hash for ${merchantId}`);
+            if (safeEqual(computedLegacy, String(body.hash))) {
+                isValid = true;
+            } else {
+                logger.warn(`[PaymentSecurity] Invalid legacy hash for ${merchantId}`);
+            }
         }
-    }
 
-    if (!isValid) {
-        throw Forbidden("Invalid Signature");
+        if (!isValid) {
+            throw Forbidden("Invalid Signature");
+        }
     }
 
     // Attach context

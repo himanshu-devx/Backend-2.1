@@ -4,12 +4,14 @@ import {
 } from "@/models/transaction.model";
 import { ListQueryDTO } from "@/dto/common.dto";
 import { Result, ok, err } from "@/utils/result";
-import { HttpError, NotFound, AppError } from "@/utils/error";
+import { HttpError, NotFound, AppError, BadRequest, Conflict } from "@/utils/error";
 import { MerchantModel } from "@/models/merchant.model";
 import { ProviderModel } from "@/models/provider.model";
 import { LegalEntityModel } from "@/models/legal-entity.model";
 import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
-import { getShiftedISTDate } from "@/utils/date.util";
+import { getShiftedISTDate, getISTDate } from "@/utils/date.util";
+import { LedgerService } from "@/services/ledger/ledger.service";
+import { TransactionStatus } from "@/models/transaction.model";
 
 export interface TransactionListFilter extends ListQueryDTO {
   merchantId?: string; // Kept for alias
@@ -20,6 +22,7 @@ export interface TransactionListFilter extends ListQueryDTO {
   orderId?: string;
   providerRef?: string;
   utr?: string;
+  flags?: string; // comma-separated
   startDate?: string;
   endDate?: string;
   category?: "PAYIN" | "PAYOUT" | "OTHER";
@@ -60,6 +63,7 @@ export class TransactionService {
       utr,
       sort,
       category,
+      flags,
     } = filter;
 
     const query: any = {};
@@ -85,6 +89,15 @@ export class TransactionService {
     if (status) query.status = status;
     if (orderId) query.orderId = orderId;
     if (providerRef) query.providerRef = providerRef;
+    if (flags) {
+      const flagList = flags
+        .split(",")
+        .map((f) => f.trim())
+        .filter(Boolean);
+      if (flagList.length > 0) {
+        query.flags = { $in: flagList };
+      }
+    }
 
     if (filter.startDate || filter.endDate) {
       if (!filter.startDate || !filter.endDate) {
@@ -266,5 +279,81 @@ export class TransactionService {
       ...txn,
       createdAt: getShiftedISTDate(txn.createdAt),
     } as any);
+  }
+
+  /**
+   * Reverse a transaction and its ledger entry
+   */
+  static async reverseTransaction(
+    id: string,
+    options: { ledgerEntryId?: string; reason?: string },
+    actor: { id: string; email?: string; role?: string }
+  ): Promise<Result<any, HttpError>> {
+    const txn = await TransactionModel.findOne({ id });
+    if (!txn) return err(NotFound("Transaction not found"));
+
+    if (txn.status === TransactionStatus.REVERSED) {
+      return err(Conflict("Transaction already reversed"));
+    }
+
+    const meta: any = txn.meta || {};
+    const entryId =
+      options.ledgerEntryId ||
+      meta.ledgerEntryId ||
+      meta.ledgerCommitEntryId ||
+      meta.ledgerHoldEntryId;
+
+    if (!entryId) {
+      return err(
+        BadRequest(
+          "No ledger entry reference found. Provide ledgerEntryId to reverse."
+        )
+      );
+    }
+
+    let reverseEntryId: string;
+    try {
+      reverseEntryId = await LedgerService.reverse(
+        entryId,
+        actor.email || actor.id || "system"
+      );
+    } catch (error: any) {
+      return err(
+        new AppError("Failed to reverse ledger entry", {
+          status: 500,
+          details: { entryId, error: error?.message },
+        })
+      );
+    }
+
+    if (txn.meta?.set) {
+      txn.meta.set("ledgerReverseEntryId", reverseEntryId);
+    } else {
+      (txn.meta as any).ledgerReverseEntryId = reverseEntryId;
+    }
+
+    txn.status = TransactionStatus.REVERSED;
+    txn.events.push({
+      type: "TRANSACTION_REVERSED",
+      timestamp: getISTDate(),
+      payload: {
+        entryId,
+        reverseEntryId,
+        reason: options.reason,
+        actor: {
+          id: actor.id,
+          email: actor.email,
+          role: actor.role,
+        },
+      },
+    });
+
+    await txn.save();
+    return ok({
+      transactionId: txn.id,
+      status: txn.status,
+      ledgerEntryId: entryId,
+      ledgerReverseEntryId: reverseEntryId,
+    });
   }
 }

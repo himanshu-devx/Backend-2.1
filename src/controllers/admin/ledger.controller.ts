@@ -1,5 +1,9 @@
 import { Context } from 'hono';
 import { LedgerEntryService, GetEntriesOptions } from '@/services/ledger/ledger-entry.service';
+import { LedgerTransferService } from '@/services/ledger/ledger-transfer.service';
+import { CreateLedgerTransferDTO } from '@/dto/ledger/ledger-transfer.dto';
+import { LedgerOperationService } from '@/services/ledger/ledger-operation.service';
+import { CreateLedgerOperationDTO } from '@/dto/ledger/ledger-operation.dto';
 
 /**
  * GET /api/admin/ledger/accounts/:accountId/entries
@@ -109,4 +113,34 @@ export const getBalanceSheet = async (c: Context) => {
     } catch (error: any) {
         return c.json({ success: false, message: 'Failed to fetch balance sheet', error: error.message }, 500);
     }
+};
+
+/**
+ * POST /api/admin/ledger/transfers
+ */
+export const createLedgerTransfer = async (c: Context) => {
+    const body = c.get('validatedBody') as CreateLedgerTransferDTO;
+    const actor = {
+        id: c.get('id'),
+        email: c.get('email'),
+        role: c.get('role'),
+    };
+
+    const result = await LedgerTransferService.createTransfer(body, actor);
+    return c.json({ success: true, data: result });
+};
+
+/**
+ * POST /api/admin/ledger/operations
+ */
+export const createLedgerOperation = async (c: Context) => {
+    const body = c.get('validatedBody') as CreateLedgerOperationDTO;
+    const actor = {
+        id: c.get('id'),
+        email: c.get('email'),
+        role: c.get('role'),
+    };
+
+    const result = await LedgerOperationService.createOperation(body, actor);
+    return c.json({ success: true, data: result });
 };

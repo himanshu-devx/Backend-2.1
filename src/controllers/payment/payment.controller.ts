@@ -5,6 +5,7 @@ import {
 } from "@/services/payment/payment.service";
 import { AppError, InternalError, BadRequest, Conflict } from "@/utils/error";
 import { AuditLogService } from "@/services/common/audit-log.service";
+import { PaymentError } from "@/utils/payment-errors.util";
 
 export class PaymentController {
   private service: PaymentService;
@@ -38,6 +39,10 @@ export class PaymentController {
 
       await AuditLogService.logFailure("PAYIN_INITIATE", error, { merchantId: logMerchantId, orderId: body?.orderId }, ip);
 
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus || 400);
+      }
       if (error.code === 11000) {
         throw Conflict("Order ID already exists. Please use a unique Order ID.");
       }
@@ -71,6 +76,10 @@ export class PaymentController {
 
       await AuditLogService.logFailure("PAYOUT_INITIATE", error, { merchantId: logMerchantId, orderId: body?.orderId }, ip);
 
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus || 400);
+      }
       if (error.code === 11000) {
         throw Conflict("Order ID already exists. Please use a unique Order ID.");
       }
@@ -91,6 +100,44 @@ export class PaymentController {
       if (!merchant) throw InternalError("Merchant context missing");
 
       const result = await this.service.getStatus(merchant.id, orderId);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+      console.error("Status Error:", error);
+      const msg = error.message || "Unknown error";
+      throw InternalError("Status check failed: " + msg);
+    }
+  }
+
+  async checkPayinStatus(c: Context) {
+    try {
+      const orderId = c.req.param("orderId");
+      const merchant = c.get("merchant");
+
+      if (!merchant) throw InternalError("Merchant context missing");
+
+      const result = await this.service.getStatusByType(merchant.id, orderId, "PAYIN");
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+      console.error("Status Error:", error);
+      const msg = error.message || "Unknown error";
+      throw InternalError("Status check failed: " + msg);
+    }
+  }
+
+  async checkPayoutStatus(c: Context) {
+    try {
+      const orderId = c.req.param("orderId");
+      const merchant = c.get("merchant");
+
+      if (!merchant) throw InternalError("Merchant context missing");
+
+      const result = await this.service.getStatusByType(merchant.id, orderId, "PAYOUT");
       return c.json({ success: true, data: result });
     } catch (error: any) {
       if (error instanceof AppError || error.name === "AppError") {

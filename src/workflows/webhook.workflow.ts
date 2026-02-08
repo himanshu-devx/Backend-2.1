@@ -5,6 +5,8 @@ import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import axios from "axios";
+import crypto from "crypto";
+import { decryptSecret } from "@/utils/secret.util";
 
 export class WebhookWorkflow {
     async execute(type: "PAYIN" | "PAYOUT", providerId: string, legalEntityId: string, payload: any) {
@@ -76,7 +78,7 @@ export class WebhookWorkflow {
         const callbackUrl = transaction.type === "PAYIN" ? merchant.payin.callbackUrl : merchant.payout.callbackUrl;
         if (!callbackUrl) return;
 
-        const payload = {
+        const basePayload = {
             orderId: transaction.orderId,
             transactionId: transaction.id,
             amount: transaction.amount,
@@ -86,7 +88,39 @@ export class WebhookWorkflow {
             timestamp: getISTDate()
         };
 
-        axios.post(callbackUrl, payload, { timeout: 5000 }).catch(err => {
+        const apiSecretEncrypted = merchant.apiSecretEncrypted;
+        let payload: any = basePayload;
+        let headers: Record<string, string> = {};
+
+        if (apiSecretEncrypted) {
+            const apiSecret = decryptSecret(apiSecretEncrypted);
+            if (apiSecret) {
+                // Legacy hash in body (amount|currency|orderId|secret)
+                const currency = transaction.currency || "INR";
+                const legacyString = `${transaction.amount}|${currency}|${transaction.orderId}|${apiSecret}`;
+                const legacyHash = crypto.createHmac("sha256", apiSecret).update(legacyString).digest("hex");
+                payload = { ...basePayload, currency, hash: legacyHash };
+
+                // Signature header over raw body + timestamp
+                const timestamp = Date.now().toString();
+                const rawBody = JSON.stringify(payload);
+                const signature = crypto
+                    .createHmac("sha256", apiSecret)
+                    .update(`${rawBody}|${timestamp}`)
+                    .digest("hex");
+
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-merchant-id": merchant.id,
+                    "x-timestamp": timestamp,
+                    "x-signature": signature,
+                };
+            } else {
+                logger.warn(`[Callback] Merchant ${merchant.id} secret decryption failed; sending unsigned callback`);
+            }
+        }
+
+        axios.post(callbackUrl, payload, { timeout: 5000, headers }).catch(err => {
             logger.warn(`[Callback] Failed for ${transaction.id}: ${err.message}`);
         });
     }

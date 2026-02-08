@@ -6,7 +6,7 @@ const schema = z.object({
     .default("development"),
   PAYMENT_PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.string().default("info"),
-  SERVICE_NAME: z.string().default("fintech-service"),
+  SERVICE_NAME: z.string().default("app-service"),
   MONGODB_URI: z.string().startsWith("mongodb"),
   MONGO_DB_NAME: z.string().min(1),
   API_PORT: z.coerce.number().default(4000),
@@ -18,7 +18,7 @@ const schema = z.object({
   POSTGRES_PORT: z.string().default("5435"),
   POSTGRES_USER: z.string().default("postgres"),
   POSTGRES_PASSWORD: z.string().default("password"),
-  POSTGRES_DB: z.string().default("wisipay_ledger"),
+  POSTGRES_DB: z.string().default("app_ledger"),
   POSTGRES_POOL_MAX: z.string().default("20"),
 
   SMTP_HOST: z.string().min(1),
@@ -33,7 +33,7 @@ const schema = z.object({
   SMTP_USER: z.string().min(1),
   SMTP_PASS: z.string().min(1),
 
-  APP_BRAND_NAME: z.string().default("Fintech App"),
+  APP_BRAND_NAME: z.string().default("Your App"),
   APP_BRAND_PREFIX: z.string().optional(),
   APP_BASE_URL: z.string().url().optional(),
   JWT_SECRET: z.string().min(1),
@@ -48,6 +48,8 @@ const schema = z.object({
   ),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW: z.coerce.number().default(60),
+  SYSTEM_TPS: z.coerce.number().default(100),
+  SYSTEM_TPS_WINDOW: z.coerce.number().default(1),
 
   // Ledger Cron Jobs
   CRON_LEDGER_SEALER: z.string().default("*/5 * * * * *"),
@@ -58,10 +60,10 @@ const schema = z.object({
   REPORT_EMAIL_TRANSACTIONS_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(false)),
   REPORT_EMAIL_STATEMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(true)),
 
-  // AlphaPay Credentials (PLE-1)
-  ALPHAPAY_PLE1_API_KEY: z.string().optional(),
-  ALPHAPAY_PLE1_API_SALT: z.string().optional(),
-  ALPHAPAY_PLE1_BASE_URL: z.string().url().optional(),
+  // Provider PLE-1 Credentials
+  PROVIDER_PLE1_API_KEY: z.string().optional(),
+  PROVIDER_PLE1_API_SALT: z.string().optional(),
+  PROVIDER_PLE1_BASE_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -101,6 +103,8 @@ export const ENV: Env = schema.parse({
     process.env.SUPER_ADMIN_PANEL_IP_WHITELIST_ENABLED,
   RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
+  SYSTEM_TPS: process.env.SYSTEM_TPS,
+  SYSTEM_TPS_WINDOW: process.env.SYSTEM_TPS_WINDOW,
   PAYMENT_PORT: process.env.PAYMENT_PORT || 3001,
   APP_BRAND_PREFIX: process.env.APP_BRAND_PREFIX,
 
@@ -113,8 +117,8 @@ export const ENV: Env = schema.parse({
   REPORT_EMAIL_TRANSACTIONS_ENABLED: process.env.REPORT_EMAIL_TRANSACTIONS_ENABLED,
   REPORT_EMAIL_STATEMENT_ENABLED: process.env.REPORT_EMAIL_STATEMENT_ENABLED,
 
-  // AlphaPay
-  ALPHAPAY_PLE1_API_KEY: process.env.ALPHAPAY_PLE1_API_KEY,
-  ALPHAPAY_PLE1_API_SALT: process.env.ALPHAPAY_PLE1_API_SALT,
-  ALPHAPAY_PLE1_BASE_URL: process.env.ALPHAPAY_PLE1_BASE_URL,
+  // Provider PLE-1
+  PROVIDER_PLE1_API_KEY: process.env.PROVIDER_PLE1_API_KEY,
+  PROVIDER_PLE1_API_SALT: process.env.PROVIDER_PLE1_API_SALT,
+  PROVIDER_PLE1_BASE_URL: process.env.PROVIDER_PLE1_BASE_URL,
 });

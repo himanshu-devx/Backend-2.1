@@ -44,7 +44,7 @@ async function verifyAsyncWorkflow() {
 
     // Queue directly (Simulating Controller)
     await WebhookQueue.enqueue({
-        providerId: "ALPHAPAY",
+        providerId: "PROVIDER_A",
         legalEntityId: "PLE-1",
         type: "PAYIN",
         payload: samplePayload

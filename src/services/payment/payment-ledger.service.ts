@@ -41,7 +41,7 @@ export class PaymentLedgerService {
             credits.push({ accountId: platformIncomeId, amount: merchantFees.total as any });
         }
 
-        return LedgerService.transfer({
+        const entryId = await LedgerService.transfer({
             narration: `Payin Success: ${transaction.orderId}`,
             externalRef: transaction.id,
             valueDate: getISTDate(),
@@ -49,6 +49,13 @@ export class PaymentLedgerService {
             credits,
             status: "POSTED"
         });
+        if (transaction?.meta?.set) {
+            transaction.meta.set("ledgerEntryId", entryId);
+        } else if (transaction?.meta) {
+            (transaction.meta as any).ledgerEntryId = entryId;
+        }
+        await transaction.save();
+        return entryId;
     }
 
     /**
@@ -58,7 +65,7 @@ export class PaymentLedgerService {
         const holdId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.HOLD);
         const providerSettlementId = LedgerUtils.generateAccountId(ENTITY_TYPE.PROVIDER, transaction.providerId!, AccountType.ASSET, ENTITY_ACCOUNT_TYPE.PAYOUT);
 
-        return LedgerService.transfer({
+        const entryId = await LedgerService.transfer({
             narration: `Payout Commit: ${transaction.orderId}`,
             externalRef: transaction.id,
             valueDate: getISTDate(),
@@ -66,6 +73,13 @@ export class PaymentLedgerService {
             credits: [{ accountId: providerSettlementId, amount: transaction.netAmount as any }],
             status: "POSTED"
         });
+        if (transaction?.meta?.set) {
+            transaction.meta.set("ledgerCommitEntryId", entryId);
+        } else if (transaction?.meta) {
+            (transaction.meta as any).ledgerCommitEntryId = entryId;
+        }
+        await transaction.save();
+        return entryId;
     }
 
     /**
@@ -75,7 +89,7 @@ export class PaymentLedgerService {
         const sourceId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYIN);
         const holdId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.HOLD);
 
-        return LedgerService.transfer({
+        const entryId = await LedgerService.transfer({
             narration: `Payout Rollback: ${transaction.orderId}`,
             externalRef: transaction.id,
             valueDate: getISTDate(),
@@ -83,5 +97,12 @@ export class PaymentLedgerService {
             credits: [{ accountId: sourceId, amount: transaction.netAmount as any }],
             status: "POSTED"
         });
+        if (transaction?.meta?.set) {
+            transaction.meta.set("ledgerRollbackEntryId", entryId);
+        } else if (transaction?.meta) {
+            (transaction.meta as any).ledgerRollbackEntryId = entryId;
+        }
+        await transaction.save();
+        return entryId;
     }
 }

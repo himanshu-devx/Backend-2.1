@@ -18,7 +18,7 @@ export class ProviderFactory {
 
         switch (config.providerId.toLowerCase()) {
             case 'dummy':
-            case 'alphapay': // Map existing AlphaPay configs to Dummy for seamless transition
+            case 'provider_a': // Map legacy Provider A configs to Dummy for seamless transition
                 return this.getDummyProvider(config);
 
             default:
@@ -33,4 +33,3 @@ export class ProviderFactory {
         return new DummyProvider(config);
     }
 }
-

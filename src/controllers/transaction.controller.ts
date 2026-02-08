@@ -3,6 +3,7 @@ import { TransactionService } from "@/services/transaction.service";
 import { respond } from "@/utils/result-http";
 import { ListQueryDTO } from "@/dto/common.dto";
 import { getAuditContext } from "@/utils/audit.util";
+import { ReverseTransactionDTO } from "@/dto/admin/transaction.dto";
 
 export class TransactionController {
   /**
@@ -52,6 +53,22 @@ export class TransactionController {
     }
 
     const result = await TransactionService.getDetails(id, scope);
+    return respond(c, result);
+  }
+
+  /**
+   * Admin: Reverse transaction
+   */
+  static async reverseAdmin(c: Context) {
+    const id = c.req.param("id");
+    const body = c.get("validatedBody") as ReverseTransactionDTO;
+    const actor = {
+      id: c.get("id"),
+      email: c.get("email"),
+      role: c.get("role"),
+    };
+
+    const result = await TransactionService.reverseTransaction(id, body, actor);
     return respond(c, result);
   }
 }

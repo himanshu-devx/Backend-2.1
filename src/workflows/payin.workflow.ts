@@ -4,18 +4,20 @@ import { TransactionModel, TransactionStatus } from "@/models/transaction.model"
 import { TransactionType, TransactionPartyType } from "@/constants/transaction.constant";
 import { Forbidden } from "@/utils/error";
 import { getISTDate } from "@/utils/date.util";
-import { ProviderFactory } from "@/providers/provider-factory";
-import { CacheService } from "@/services/common/cache.service";
+import { PaymentRoutingService } from "@/services/payment/payment-routing.service";
 import { ENV } from "@/config/env";
 import { logger } from "@/infra/logger-instance";
 import { PaymentError, PaymentErrorCode, mapToPaymentError } from "@/utils/payment-errors.util";
 import { generateCustomId } from "@/utils/id.util";
+import { ProviderClient } from "@/services/provider/provider-client.service";
+import { TpsService } from "@/services/common/tps.service";
 
 export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
     private merchantFees: any;
     private providerFees: any;
     private routing: any;
     private channel: any;
+    private channelChain: any[] = [];
     private generatedId!: string;
 
     protected getWorkflowName(): string { return "PAYIN"; }
@@ -46,23 +48,20 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
             throw new PaymentError(PaymentErrorCode.SERVICE_DISABLED);
         }
 
-        // Routing
-        this.routing = config.routing;
-        if (!this.routing?.providerId) {
-            throw new PaymentError(PaymentErrorCode.ROUTING_NOT_CONFIGURED);
+        // Routing (Primary + Fallbacks)
+        try {
+            this.channelChain = await PaymentRoutingService.getProviderChain(this.merchant.id, "PAYIN");
+        } catch (error: any) {
+            throw new PaymentError(PaymentErrorCode.CHANNEL_NOT_FOUND, { message: error.message });
         }
-
-        this.channel = await CacheService.getChannel(this.routing.providerId, this.routing.legalEntityId);
-        if (!this.channel) {
-            throw new PaymentError(PaymentErrorCode.CHANNEL_NOT_FOUND);
-        }
-        if (!this.channel.isActive) {
-            throw new PaymentError(PaymentErrorCode.CHANNEL_INACTIVE);
-        }
+        this.channel = this.channelChain[0];
+        this.routing = {
+            providerId: this.channel.providerId,
+            legalEntityId: this.channel.legalEntityId,
+        };
 
         // Fees
         this.merchantFees = this.calculateFees(dto.amount, config.fees);
-        this.providerFees = this.calculateFees(dto.amount, this.channel.payin.fees);
     }
 
     protected async persist(dto: InitiatePayinDto, gatewayResult: any): Promise<void> {
@@ -101,20 +100,58 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
     }
 
     protected async gatewayCall(dto: InitiatePayinDto): Promise<any> {
-        const provider = ProviderFactory.getProvider(this.channel.id);
-        const providerRequest = {
-            amount: dto.amount,
-            transactionId: this.generatedId, // Use pre-generated ID
-            customerName: dto.customerName,
-            customerEmail: dto.customerEmail,
-            customerPhone: dto.customerPhone,
-            callbackUrl: `${ENV.APP_BASE_URL || "http://localhost:4000"}/webhook/payin/${this.routing.providerId}/${this.routing.legalEntityId}`,
-            redirectUrl: dto.redirectUrl,
-            remarks: dto.remarks || "Payin",
-            company: this.merchant.id
-        };
+        let lastError: any;
 
-        return provider.handlePayin(providerRequest);
+        for (const channel of this.channelChain) {
+            try {
+                this.channel = channel;
+                this.routing = {
+                    providerId: channel.providerId,
+                    legalEntityId: channel.legalEntityId,
+                };
+                this.providerFees = this.calculateFees(dto.amount, channel.payin.fees);
+
+                // TPS: system + merchant (once) is enforced before first provider call
+                if (channel === this.channelChain[0]) {
+                    await TpsService.system("PAYIN", ENV.SYSTEM_TPS, ENV.SYSTEM_TPS_WINDOW);
+                    await TpsService.merchant(this.merchant.id, "PAYIN", this.merchant.payin?.tps || 0);
+                }
+
+                // TPS: provider/PLE level
+                await TpsService.ple(channel.id, "PAYIN", channel.payin?.tps || 0);
+
+                const provider = ProviderClient.getProvider(channel.id);
+                const providerRequest = {
+                    amount: dto.amount,
+                    transactionId: this.generatedId, // Use pre-generated ID
+                    customerName: dto.customerName,
+                    customerEmail: dto.customerEmail,
+                    customerPhone: dto.customerPhone,
+                    callbackUrl: `${ENV.APP_BASE_URL || "http://localhost:4000"}/webhook/payin/${this.routing.providerId}/${this.routing.legalEntityId}`,
+                    redirectUrl: dto.redirectUrl,
+                    remarks: dto.remarks || "Payin",
+                    company: this.merchant.id
+                };
+
+                const result = await ProviderClient.execute(channel.id, "payin", () =>
+                    provider.handlePayin(providerRequest)
+                );
+
+                if (!result.success && result.status !== "PENDING") {
+                    throw new Error(result.message || "Provider rejected request");
+                }
+
+                return result;
+            } catch (error: any) {
+                lastError = error;
+                if (!ProviderClient.isRetryableError(error)) {
+                    throw mapToPaymentError(error);
+                }
+                logger.warn(`[PayinWorkflow] Provider ${channel.id} failed, trying fallback...`);
+            }
+        }
+
+        throw mapToPaymentError(lastError || new Error("Provider unavailable"));
     }
 
     protected async postExecute(result: any): Promise<void> {

@@ -32,6 +32,10 @@ export interface SharedServiceConfig {
     providerId: string;
     legalEntityId: string;
   };
+  routingFallbacks?: {
+    providerId: string;
+    legalEntityId: string;
+  }[];
 }
 
 const FeeComponentSchema = new Schema(
@@ -86,6 +90,15 @@ export const SharedServiceConfigSchema = new Schema(
     routing: {
       providerId: { type: String },
       legalEntityId: { type: String },
+    },
+    routingFallbacks: {
+      type: [
+        {
+          providerId: { type: String },
+          legalEntityId: { type: String },
+        },
+      ],
+      default: [],
     },
   },
   { _id: false }

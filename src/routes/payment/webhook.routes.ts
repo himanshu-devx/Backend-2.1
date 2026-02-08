@@ -5,8 +5,8 @@ const router = new Hono();
 
 /**
  * Common webhook route for all providers
- * Example: POST /webhook/payin/alphapay/wisipay
- *          POST /webhook/payout/alphapay/wisipay
+ * Example: POST /webhook/payin/provider-a/client-a
+ *          POST /webhook/payout/provider-a/client-a
  */
 router.post("/:type/:provider/:legalentity", (c) => webhookController.handleProviderWebhook(c));
 

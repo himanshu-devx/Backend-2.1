@@ -76,21 +76,61 @@ export class PaymentRoutingService {
         serviceType: 'PAYIN' | 'PAYOUT',
         excludePleIds: string[] = []
     ): Promise<string> {
-        // For now, just use primary routing
-        // TODO: Implement fallback logic by checking multiple PLE configurations
-        // This could involve:
-        // 1. Checking merchant's secondary routing configs
-        // 2. Checking provider health metrics
-        // 3. Round-robin across multiple providers
+        const chain = await this.getProviderChain(merchantId, serviceType);
+        const filtered = chain.filter((c) => !excludePleIds.includes(c.id));
+        if (filtered.length === 0) {
+            throw new Error('No available provider channels after fallback filtering');
+        }
+        return filtered[0].id;
+    }
 
-        const pleId = await this.selectProvider(merchantId, serviceType);
-
-        // Check if this PLE is excluded
-        if (excludePleIds.includes(pleId)) {
-            throw new Error('Primary provider failed and no fallback configured');
+    /**
+     * Get provider chain (primary + fallbacks) for a merchant
+     */
+    static async getProviderChain(
+        merchantId: string,
+        serviceType: 'PAYIN' | 'PAYOUT'
+    ): Promise<ProviderLegalEntityDocument[]> {
+        const merchant = await CacheService.getMerchant(merchantId);
+        if (!merchant) {
+            throw new Error('Merchant not found');
         }
 
-        return pleId;
+        const config = serviceType === 'PAYIN' ? merchant.payin : merchant.payout;
+
+        if (!config.isActive) {
+            throw new Error(`${serviceType} service is not active for this merchant`);
+        }
+
+        if (!config.routing || !config.routing.providerId || !config.routing.legalEntityId) {
+            throw new Error(`${serviceType} routing not configured for merchant. Please configure provider and legal entity in merchant settings.`);
+        }
+
+        const routingChain = [
+            config.routing,
+            ...(config.routingFallbacks || []),
+        ].filter(Boolean);
+
+        const unique = new Map<string, { providerId: string; legalEntityId: string }>();
+        for (const r of routingChain) {
+            const key = `${r.providerId}:${r.legalEntityId}`;
+            if (!unique.has(key)) unique.set(key, r);
+        }
+
+        const channels: ProviderLegalEntityDocument[] = [];
+        for (const r of unique.values()) {
+            const ple = await CacheService.getChannel(r.providerId, r.legalEntityId);
+            if (!ple || !ple.isActive) continue;
+            const pleServiceConfig = serviceType === 'PAYIN' ? ple.payin : ple.payout;
+            if (!pleServiceConfig?.isActive) continue;
+            channels.push(ple);
+        }
+
+        if (channels.length === 0) {
+            throw new Error(`No active provider channels for ${serviceType}`);
+        }
+
+        return channels;
     }
 
     /**

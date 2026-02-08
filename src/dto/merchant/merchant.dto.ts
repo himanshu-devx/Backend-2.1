@@ -144,5 +144,21 @@ export const UpdateRoutingSchema = z.object({
       legalEntityId: z.string().optional(),
     })
     .optional(),
+  payinRoutingFallbacks: z
+    .array(
+      z.object({
+        providerId: z.string(),
+        legalEntityId: z.string(),
+      })
+    )
+    .optional(),
+  payoutRoutingFallbacks: z
+    .array(
+      z.object({
+        providerId: z.string(),
+        legalEntityId: z.string(),
+      })
+    )
+    .optional(),
 });
 export type UpdateRoutingDTO = z.infer<typeof UpdateRoutingSchema>;

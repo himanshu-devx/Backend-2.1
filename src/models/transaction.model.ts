@@ -6,6 +6,7 @@ import { ENV } from "@/config/env";
 import {
   TransactionPartyType,
   TransactionType,
+  TransactionFlag,
 } from "@/constants/transaction.constant";
 
 export enum TransactionStatus {
@@ -14,6 +15,7 @@ export enum TransactionStatus {
   SUCCESS = "SUCCESS",
   FAILED = "FAILED",
   EXPIRED = "EXPIRED",
+  REVERSED = "REVERSED",
 }
 
 export interface FeeDetail {
@@ -80,6 +82,7 @@ export interface TransactionDocument extends Document {
     [key: string]: any;
   };
   events: TransactionEvent[];
+  flags?: TransactionFlag[];
 
   createdAt: Date;
   updatedAt: Date;
@@ -226,6 +229,12 @@ const TransactionSchema = new Schema<TransactionDocument>(
         _id: false,
       },
     ],
+    flags: {
+      type: [String],
+      enum: Object.values(TransactionFlag),
+      default: [],
+      index: true,
+    },
   },
   {
     timestamps: true,

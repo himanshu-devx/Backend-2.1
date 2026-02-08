@@ -6,6 +6,7 @@ import { ProviderModel } from "@/models/provider.model";
 import { LegalEntityModel } from "@/models/legal-entity.model";
 import {
     TransactionType,
+    TransactionFlag,
 } from "@/constants/transaction.constant";
 import { TransactionStatus } from "@/models/transaction.model";
 
@@ -28,6 +29,10 @@ export class FilterController {
             id: s,
             name: s,
         }));
+        const transactionFlags = Object.values(TransactionFlag).map((f) => ({
+            id: f,
+            name: f,
+        }));
 
         return respond(
             c,
@@ -47,6 +52,7 @@ export class FilterController {
                 })),
                 transactionTypes,
                 transactionStatuses,
+                transactionFlags,
             })
         );
     }

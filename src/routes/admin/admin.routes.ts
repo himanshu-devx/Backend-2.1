@@ -19,6 +19,7 @@ import {
   UpdateAdminProfileSchema,
 } from "@/dto/admin/admin.dto";
 import { ListQuerySchema, TransactionListQuerySchema } from "@/dto/common.dto";
+import { ReverseTransactionSchema } from "@/dto/admin/transaction.dto";
 
 const adminManageRoutes = new Hono();
 
@@ -92,6 +93,16 @@ adminManageRoutes.get(
     ADMIN_ROLES.SUPPORT,
   ]),
   handler(TransactionController.getDetails)
+);
+
+adminManageRoutes.post(
+  "/transactions/:id/reverse",
+  authorizeRoles([
+    ADMIN_ROLES.SUPER_ADMIN,
+    ADMIN_ROLES.ADMIN,
+  ]),
+  validateBody(ReverseTransactionSchema),
+  handler(TransactionController.reverseAdmin)
 );
 
 // Dynamic :id routes come after specific routes

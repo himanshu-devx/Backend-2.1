@@ -3,8 +3,27 @@ import { authorizeRoles } from '@/middlewares/auth.middleware';
 import { handler } from '@/utils/handler';
 import * as ledgerController from '@/controllers/admin/ledger.controller';
 import { ADMIN_ROLES } from '@/constants/users.constant';
+import { validateBody } from '@/middlewares/validate';
+import { CreateLedgerTransferSchema } from '@/dto/ledger/ledger-transfer.dto';
+import { CreateLedgerOperationSchema } from '@/dto/ledger/ledger-operation.dto';
 
 const adminLedgerRoutes = new Hono();
+
+// Create a manual ledger transfer
+adminLedgerRoutes.post(
+    '/transfers',
+    authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),
+    validateBody(CreateLedgerTransferSchema),
+    handler(ledgerController.createLedgerTransfer)
+);
+
+// Create a predefined ledger operation
+adminLedgerRoutes.post(
+    '/operations',
+    authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),
+    validateBody(CreateLedgerOperationSchema),
+    handler(ledgerController.createLedgerOperation)
+);
 
 // Get entries for a specific account
 adminLedgerRoutes.get(

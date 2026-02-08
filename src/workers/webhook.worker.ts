@@ -39,8 +39,7 @@ async function startWorker() {
 
             } catch (workflowError: any) {
                 logger.error(`[WebhookWorker] Workflow Error: ${workflowError.message}`);
-                // Since we don't have a DB log, we rely on Redis retries or dead-letter queues in a real system.
-                // For now, we just log the error.
+                await WebhookQueue.retry(task, workflowError.message || "Workflow error");
             }
 
         } catch (err: any) {

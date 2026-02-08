@@ -26,6 +26,39 @@ export class PaymentService {
 
   async getStatus(merchantId: string, orderId: string) {
     const { StatusSyncWorkflow } = await import("@/workflows/status-sync.workflow");
+    const { CacheService } = await import("@/services/common/cache.service");
+    const { TpsService } = await import("@/services/common/tps.service");
+    const { ENV } = await import("@/config/env");
+
+    await TpsService.system("STATUS", ENV.SYSTEM_TPS, ENV.SYSTEM_TPS_WINDOW);
+    const merchant = await CacheService.getMerchant(merchantId);
+    if (merchant?.payin?.tps) {
+      await TpsService.merchant(merchantId, "PAYIN", merchant.payin.tps);
+    }
+
+    const workflow = new StatusSyncWorkflow();
+    return workflow.execute(merchantId, orderId);
+  }
+
+  async getStatusByType(
+    merchantId: string,
+    orderId: string,
+    type: "PAYIN" | "PAYOUT"
+  ) {
+    const { StatusSyncWorkflow } = await import("@/workflows/status-sync.workflow");
+    const { CacheService } = await import("@/services/common/cache.service");
+    const { TpsService } = await import("@/services/common/tps.service");
+    const { ENV } = await import("@/config/env");
+
+    await TpsService.system(type, ENV.SYSTEM_TPS, ENV.SYSTEM_TPS_WINDOW);
+    const merchant = await CacheService.getMerchant(merchantId);
+    if (type === "PAYIN" && merchant?.payin?.tps) {
+      await TpsService.merchant(merchantId, "PAYIN", merchant.payin.tps);
+    }
+    if (type === "PAYOUT" && merchant?.payout?.tps) {
+      await TpsService.merchant(merchantId, "PAYOUT", merchant.payout.tps);
+    }
+
     const workflow = new StatusSyncWorkflow();
     return workflow.execute(merchantId, orderId);
   }

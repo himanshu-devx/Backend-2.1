@@ -4,20 +4,23 @@ import { TransactionModel, TransactionStatus } from "@/models/transaction.model"
 import { TransactionType, TransactionPartyType } from "@/constants/transaction.constant";
 import { Forbidden } from "@/utils/error";
 import { getISTDate } from "@/utils/date.util";
-import { ProviderFactory } from "@/providers/provider-factory";
-import { CacheService } from "@/services/common/cache.service";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { LedgerService } from "@/services/ledger/ledger.service";
 import { LedgerUtils } from "@/utils/ledger.utils";
 import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
 import { AccountType } from "fintech-ledger";
 import { PaymentError, PaymentErrorCode, mapToPaymentError } from "@/utils/payment-errors.util";
+import { PaymentRoutingService } from "@/services/payment/payment-routing.service";
+import { ProviderClient } from "@/services/provider/provider-client.service";
+import { TpsService } from "@/services/common/tps.service";
+import { ENV } from "@/config/env";
 
 export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
     private merchantFees: any;
     private providerFees: any;
     private routing: any;
     private channel: any;
+    private channelChain: any[] = [];
 
     protected getWorkflowName(): string { return "PAYOUT"; }
 
@@ -34,21 +37,23 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
             throw new PaymentError(PaymentErrorCode.SERVICE_DISABLED);
         }
 
-        this.routing = config.routing;
-        if (!this.routing?.providerId) {
-            throw new PaymentError(PaymentErrorCode.ROUTING_NOT_CONFIGURED);
+        try {
+            this.channelChain = await PaymentRoutingService.getProviderChain(this.merchant.id, "PAYOUT");
+        } catch (error: any) {
+            throw new PaymentError(PaymentErrorCode.CHANNEL_NOT_FOUND, { message: error.message });
         }
-
-        this.channel = await CacheService.getChannel(this.routing.providerId, this.routing.legalEntityId);
-        if (!this.channel) {
-            throw new PaymentError(PaymentErrorCode.CHANNEL_NOT_FOUND);
-        }
-        if (!this.channel.isActive) {
-            throw new PaymentError(PaymentErrorCode.CHANNEL_INACTIVE);
-        }
+        this.channel = this.channelChain[0];
+        this.routing = {
+            providerId: this.channel.providerId,
+            legalEntityId: this.channel.legalEntityId,
+        };
 
         this.merchantFees = this.calculateFees(dto.amount, config.fees);
         this.providerFees = this.calculateFees(dto.amount, this.channel.payout.fees);
+
+        // TPS: system + merchant (once) before first provider call
+        await TpsService.system("PAYOUT", ENV.SYSTEM_TPS, ENV.SYSTEM_TPS_WINDOW);
+        await TpsService.merchant(this.merchant.id, "PAYOUT", config.tps || 0);
     }
 
     protected async persist(dto: InitiatePayoutDto, gatewayResult?: any): Promise<void> {
@@ -107,29 +112,59 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
     }
 
     protected async gatewayCall(dto: InitiatePayoutDto): Promise<any> {
-        try {
-            const provider = ProviderFactory.getProvider(this.channel.id);
-            const providerRequest = {
-                amount: dto.amount,
-                transactionId: this.transaction.id,
-                beneficiaryName: dto.beneficiaryName,
-                beneficiaryAccountNumber: dto.beneficiaryAccountNumber,
-                beneficiaryBankIfsc: dto.beneficiaryIfsc,
-                beneficiaryBankName: dto.beneficiaryBankName,
-                mode: dto.paymentMode,
-                remarks: dto.remarks || "Payout",
-            };
+        let lastError: any;
 
-            const result = await provider.handlePayout(providerRequest);
-            if (!result.success) {
-                throw new PaymentError(PaymentErrorCode.PROVIDER_REJECTED, {
-                    providerMessage: result.message
-                });
+        for (const channel of this.channelChain) {
+            try {
+                if (channel.id !== this.channel.id) {
+                    this.channel = channel;
+                    this.routing = {
+                        providerId: channel.providerId,
+                        legalEntityId: channel.legalEntityId,
+                    };
+                    this.providerFees = this.calculateFees(dto.amount, channel.payout.fees);
+
+                    this.transaction.providerId = this.routing.providerId;
+                    this.transaction.legalEntityId = this.routing.legalEntityId;
+                    this.transaction.providerLegalEntityId = channel.id;
+                    this.transaction.fees = { merchantFees: this.merchantFees, providerFees: this.providerFees };
+                    await this.transaction.save();
+                }
+
+                const provider = ProviderClient.getProvider(channel.id);
+
+                // TPS: provider/PLE level
+                await TpsService.ple(channel.id, "PAYOUT", channel.payout?.tps || 0);
+                const providerRequest = {
+                    amount: dto.amount,
+                    transactionId: this.transaction.id,
+                    beneficiaryName: dto.beneficiaryName,
+                    beneficiaryAccountNumber: dto.beneficiaryAccountNumber,
+                    beneficiaryBankIfsc: dto.beneficiaryIfsc,
+                    beneficiaryBankName: dto.beneficiaryBankName,
+                    mode: dto.paymentMode,
+                    remarks: dto.remarks || "Payout",
+                };
+
+                const result = await ProviderClient.execute(channel.id, "payout", () =>
+                    provider.handlePayout(providerRequest)
+                );
+                if (!result.success) {
+                    throw new PaymentError(PaymentErrorCode.PROVIDER_REJECTED, {
+                        providerMessage: result.message
+                    });
+                }
+                return result;
+            } catch (error: any) {
+                lastError = error;
+                if (!ProviderClient.isRetryableError(error)) {
+                    throw mapToPaymentError(error);
+                }
+                logger.warn(`[PayoutWorkflow] Provider ${channel.id} failed, trying fallback...`);
             }
-            return result;
-        } catch (error: any) {
-            throw mapToPaymentError(error);
         }
+
+        throw mapToPaymentError(lastError || new Error("Provider unavailable"));
     }
 
     protected async postExecute(result: any): Promise<void> {

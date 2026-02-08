@@ -1,10 +1,10 @@
 import { TransactionModel, TransactionStatus, TransactionDocument } from "@/models/transaction.model";
-import { ProviderFactory } from "@/providers/provider-factory";
 import { CacheService } from "@/services/common/cache.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { NotFound } from "@/utils/error";
+import { ProviderClient } from "@/services/provider/provider-client.service";
 
 export class StatusSyncWorkflow {
     async execute(merchantId: string, orderId: string): Promise<TransactionDocument> {
@@ -23,14 +23,16 @@ export class StatusSyncWorkflow {
         const ple = await CacheService.getChannelById(transaction.providerLegalEntityId);
         if (!ple) return transaction;
 
-        const provider = ProviderFactory.getProvider(ple.id);
+        const provider = ProviderClient.getProvider(ple.id);
 
         logger.info(`[StatusSync] Syncing ${transaction.id} with ${ple.providerId}`);
-        const result = await provider.checkStatus({
-            transactionId: transaction.id,
-            providerTransactionId: transaction.providerRef,
-            type: transaction.type as 'PAYIN' | 'PAYOUT'
-        });
+        const result = await ProviderClient.execute(ple.id, "status", () =>
+            provider.checkStatus({
+                transactionId: transaction.id,
+                providerTransactionId: transaction.providerRef,
+                type: transaction.type as 'PAYIN' | 'PAYOUT'
+            })
+        );
 
         // 4. State Transition (Workflow Step)
         if (result.status && result.status !== transaction.status) {

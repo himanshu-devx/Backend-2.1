@@ -324,8 +324,10 @@ export const emailTemplates: EmailTemplateFnMap = {
       <p style="font-size: 13px; color: #888; border-top: 1px solid ${COLORS.border}; padding-top: 15px;"><b>Security Note:</b> This report contains sensitive financial statistics. Handle according to organization policy.</p>
     `;
 
+    const brandPrefix = (ENV.APP_BRAND_PREFIX || ENV.APP_BRAND_NAME || "APP").toUpperCase();
+
     return {
-      subject: `[FINTECH] ${ctx.reportType} Report - ${ctx.reportId}`,
+      subject: `[${brandPrefix}] ${ctx.reportType} Report - ${ctx.reportId}`,
       html: baseEmailLayout(bodyContent),
       text: `Hello ${ctx.ownerName}. Your ${ctx.reportType} report (${ctx.reportId}) is ready for download.`,
     };

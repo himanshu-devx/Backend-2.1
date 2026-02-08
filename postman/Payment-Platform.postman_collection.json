@@ -1,34 +1,109 @@
 {
   "info": {
-    "name": "Wisipay Fintech API",
+    "name": "Payment Platform API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "http://localhost:4000" },
-    { "key": "payment_url", "value": "http://localhost:3000" },
-    { "key": "admin_token", "value": "" },
-    { "key": "admin_id", "value": "" },
-    { "key": "merchant_token", "value": "" },
-    { "key": "admin_email", "value": "admin@test.local" },
-    { "key": "admin_password", "value": "Admin#12345" },
-    { "key": "merchant_email", "value": "merchant@test.local" },
-    { "key": "merchant_password", "value": "Merchant#12345" },
-    { "key": "device_id", "value": "postman-device-1" },
-    { "key": "otp", "value": "" },
-    { "key": "reset_token", "value": "" },
-    { "key": "merchant_id", "value": "" },
-    { "key": "provider_id", "value": "dummy" },
-    { "key": "legal_entity_id", "value": "default" },
-    { "key": "ple_id", "value": "PLE-1" },
-    { "key": "api_secret", "value": "" },
-    { "key": "timestamp", "value": "" },
-    { "key": "signature", "value": "" },
-    { "key": "order_id", "value": "ORDER1234567890" },
-    { "key": "bank_account_id", "value": "" },
-    { "key": "account_id", "value": "" },
-    { "key": "entry_id", "value": "" },
-    { "key": "transaction_id", "value": "" },
-    { "key": "report_id", "value": "" }
+    {
+      "key": "base_url",
+      "value": "http://localhost:4000"
+    },
+    {
+      "key": "payment_url",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "admin_id",
+      "value": ""
+    },
+    {
+      "key": "merchant_token",
+      "value": ""
+    },
+    {
+      "key": "admin_email",
+      "value": "admin@test.local"
+    },
+    {
+      "key": "admin_password",
+      "value": "Admin#12345"
+    },
+    {
+      "key": "merchant_email",
+      "value": "merchant@test.local"
+    },
+    {
+      "key": "merchant_password",
+      "value": "Merchant#12345"
+    },
+    {
+      "key": "device_id",
+      "value": "postman-device-1"
+    },
+    {
+      "key": "otp",
+      "value": ""
+    },
+    {
+      "key": "reset_token",
+      "value": ""
+    },
+    {
+      "key": "merchant_id",
+      "value": ""
+    },
+    {
+      "key": "provider_id",
+      "value": "dummy"
+    },
+    {
+      "key": "legal_entity_id",
+      "value": "default"
+    },
+    {
+      "key": "ple_id",
+      "value": "PLE-1"
+    },
+    {
+      "key": "api_secret",
+      "value": ""
+    },
+    {
+      "key": "timestamp",
+      "value": ""
+    },
+    {
+      "key": "signature",
+      "value": ""
+    },
+    {
+      "key": "order_id",
+      "value": "ORDER1234567890"
+    },
+    {
+      "key": "bank_account_id",
+      "value": ""
+    },
+    {
+      "key": "account_id",
+      "value": ""
+    },
+    {
+      "key": "entry_id",
+      "value": ""
+    },
+    {
+      "key": "transaction_id",
+      "value": ""
+    },
+    {
+      "key": "report_id",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -60,7 +135,12 @@
               "name": "Create Super Admin",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/admin/create-super-admin",
                 "body": {
                   "mode": "raw",
@@ -72,7 +152,12 @@
               "name": "Login",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/admin/login",
                 "body": {
                   "mode": "raw",
@@ -96,7 +181,12 @@
               "name": "Verify Login OTP",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/admin/verify-login-otp",
                 "body": {
                   "mode": "raw",
@@ -120,7 +210,12 @@
               "name": "Forgot Password",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/admin/forgot-password",
                 "body": {
                   "mode": "raw",
@@ -132,7 +227,12 @@
               "name": "Confirm Reset Password",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/admin/confirm-reset-password",
                 "body": {
                   "mode": "raw",
@@ -149,7 +249,12 @@
               "name": "Register Merchant",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/merchant/register",
                 "body": {
                   "mode": "raw",
@@ -172,7 +277,12 @@
               "name": "Login",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/merchant/login",
                 "body": {
                   "mode": "raw",
@@ -196,7 +306,12 @@
               "name": "Verify OTP",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/merchant/verify-otp",
                 "body": {
                   "mode": "raw",
@@ -220,7 +335,12 @@
               "name": "Forgot Password",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/merchant/forgot-password",
                 "body": {
                   "mode": "raw",
@@ -232,7 +352,12 @@
               "name": "Confirm Reset Password",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{base_url}}/api/auth/merchant/confirm-reset-password",
                 "body": {
                   "mode": "raw",
@@ -246,7 +371,12 @@
           "name": "Refresh Token",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
             "url": "{{base_url}}/api/auth/refresh"
           }
         }
@@ -263,8 +393,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/create-admin",
                 "body": {
@@ -278,8 +414,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/profile",
                 "body": {
@@ -293,8 +435,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/{{admin_id}}/profile",
                 "body": {
@@ -307,7 +455,12 @@
               "name": "List Admins",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/list-admins?page=1&limit=10&search=&sort=-createdAt&role=&status="
               }
             },
@@ -315,7 +468,12 @@
               "name": "Get Admin By ID",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/{{admin_id}}"
               }
             },
@@ -323,7 +481,12 @@
               "name": "Toggle Admin Status",
               "request": {
                 "method": "PUT",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/{{admin_id}}/status"
               }
             },
@@ -332,8 +495,14 @@
               "request": {
                 "method": "PATCH",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/{{admin_id}}/role",
                 "body": {
@@ -347,8 +516,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/{{admin_id}}/panel-ip-whitelist",
                 "body": {
@@ -361,7 +536,12 @@
               "name": "Login History (Own)",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/login-history"
               }
             },
@@ -369,7 +549,12 @@
               "name": "Login History (All)",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/login-history-all?page=1&limit=10&userId=&userType=&email=&status=&startDate=2025-01-01&endDate=2025-12-31"
               }
             },
@@ -377,7 +562,12 @@
               "name": "Dashboard Stats",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/dashboard/stats?startDate=2025-01-01&endDate=2025-12-31&bucket=daily&merchantId=&providerId=&legalEntityId="
               }
             },
@@ -385,7 +575,12 @@
               "name": "Transactions List",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/transactions?page=1&limit=10&status=&type=&category=&merchantId=&providerId=&legalEntityId=&entityId=&entityType=&orderId=&providerRef=&utr=&startDate=2025-01-01&endDate=2025-12-31"
               }
             },
@@ -393,8 +588,34 @@
               "name": "Transaction By ID",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/transactions/{{transaction_id}}"
+              }
+            },
+            {
+              "name": "Reverse Transaction",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{base_url}}/api/admin/transactions/{{transaction_id}}/reverse",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ledgerEntryId\": \"\",\n  \"reason\": \"Manual reversal\"\n}"
+                }
               }
             }
           ]
@@ -406,7 +627,12 @@
               "name": "List Merchants",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchants/list-merchants?page=1&limit=10&search=&sort=-createdAt&status="
               }
             },
@@ -414,7 +640,12 @@
               "name": "Get Merchant",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}"
               }
             },
@@ -422,7 +653,12 @@
               "name": "Get Merchant Activity",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/activity"
               }
             },
@@ -430,7 +666,12 @@
               "name": "Get Merchant Bank Accounts",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/bank-accounts"
               }
             },
@@ -438,7 +679,12 @@
               "name": "Onboard Merchant",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/onboard"
               }
             },
@@ -446,7 +692,12 @@
               "name": "Update Merchant Status",
               "request": {
                 "method": "PUT",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/status"
               }
             },
@@ -455,8 +706,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/panel-ip-whitelist",
                 "body": {
@@ -470,8 +727,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/profile",
                 "body": {
@@ -485,8 +748,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/payin-config",
                 "body": {
@@ -500,8 +769,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/payout-config",
                 "body": {
@@ -515,8 +790,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/routing",
                 "body": {
@@ -530,8 +811,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/payin-config/fees",
                 "body": {
@@ -545,8 +832,14 @@
               "request": {
                 "method": "DELETE",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/payin-config/fees",
                 "body": {
@@ -560,8 +853,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/payout-config/fees",
                 "body": {
@@ -575,8 +874,14 @@
               "request": {
                 "method": "DELETE",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/payout-config/fees",
                 "body": {
@@ -589,7 +894,12 @@
               "name": "Rotate API Secret",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/rotate-api-secret"
               },
               "event": [
@@ -609,8 +919,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchants/{{merchant_id}}/toggle-api-secret",
                 "body": {
@@ -628,7 +944,12 @@
               "name": "List",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/merchant-bank-accounts?page=1&limit=10&merchantId=&status="
               }
             },
@@ -637,8 +958,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchant-bank-accounts/{{bank_account_id}}/status",
                 "body": {
@@ -652,8 +979,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/merchant-bank-accounts/{{bank_account_id}}/active",
                 "body": {
@@ -672,8 +1005,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/providers",
                 "body": {
@@ -686,7 +1025,12 @@
               "name": "List Providers",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/providers"
               }
             },
@@ -694,7 +1038,12 @@
               "name": "Get Provider",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/providers/{{provider_id}}"
               }
             },
@@ -703,8 +1052,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/providers/{{provider_id}}",
                 "body": {
@@ -723,8 +1078,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/legal-entities",
                 "body": {
@@ -737,7 +1098,12 @@
               "name": "List Legal Entities",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/legal-entities"
               }
             },
@@ -745,7 +1111,12 @@
               "name": "Get Legal Entity",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/legal-entities/{{legal_entity_id}}"
               }
             },
@@ -754,8 +1125,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/legal-entities/{{legal_entity_id}}",
                 "body": {
@@ -774,8 +1151,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity",
                 "body": {
@@ -799,7 +1182,12 @@
               "name": "List PLE",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity?page=1&limit=10&search=&sort=-createdAt&providerId=&legalEntityId="
               }
             },
@@ -807,7 +1195,12 @@
               "name": "Get PLE",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity/{{ple_id}}"
               }
             },
@@ -816,8 +1209,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity/{{ple_id}}/payin",
                 "body": {
@@ -831,8 +1230,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity/{{ple_id}}/payin/fees",
                 "body": {
@@ -846,8 +1251,14 @@
               "request": {
                 "method": "DELETE",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity/{{ple_id}}/payin/fees",
                 "body": {
@@ -861,8 +1272,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity/{{ple_id}}/payout",
                 "body": {
@@ -876,8 +1293,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity/{{ple_id}}/payout/fees",
                 "body": {
@@ -891,8 +1314,14 @@
               "request": {
                 "method": "DELETE",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/provider-legal-entity/{{ple_id}}/payout/fees",
                 "body": {
@@ -907,10 +1336,78 @@
           "name": "Ledger",
           "item": [
             {
+              "name": "Create Transfer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{base_url}}/api/admin/ledger/transfers",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"INTERNAL_TRANSFER\",\n  \"amount\": 1000,\n  \"currency\": \"INR\",\n  \"narration\": \"Manual transfer\",\n  \"remarks\": \"Optional remarks\",\n  \"utr\": \"UTR123456\",\n  \"valueDate\": \"2026-02-01\",\n  \"status\": \"POSTED\",\n  \"from\": {\n    \"entityType\": \"MERCHANT\",\n    \"entityId\": \"{{merchant_id}}\",\n    \"purpose\": \"PAYIN\"\n  },\n  \"to\": {\n    \"world\": true\n  },\n  \"party\": {\n    \"type\": \"SYSTEM\",\n    \"name\": \"Internal Ops\"\n  },\n  \"fromDetails\": {\n    \"accountNumber\": \"1234567890\",\n    \"ifscCode\": \"HDFC0001234\",\n    \"bankName\": \"HDFC Bank\"\n  },\n  \"toDetails\": {\n    \"accountNumber\": \"WORLD\",\n    \"bankName\": \"World\"\n  },\n  \"metadata\": {\n    \"reason\": \"Settlement\",\n    \"reference\": \"MANUAL-001\"\n  }\n}"
+                }
+              }
+            },
+            {
+              "name": "Create Operation",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{base_url}}/api/admin/ledger/operations",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"operation\": \"MERCHANT_SETTLEMENT_PAYOUT\",\n  \"merchantId\": \"{{merchant_id}}\",\n  \"amount\": 1000,\n  \"currency\": \"INR\",\n  \"status\": \"POSTED\",\n  \"counterparty\": \"WORLD\",\n  \"valueDate\": \"2026-02-01\",\n  \"accountType\": \"PAYIN\",\n  \"bankAccountId\": \"{{bank_account_id}}\",\n  \"providerLegalEntityId\": \"{{ple_id}}\",\n  \"metadata\": {\n    \"notes\": \"Optional metadata\",\n    \"source\": \"manual\"\n  }\n}"
+                }
+              }
+            },
+            {
+              "name": "Operation - PLE Expense Charge",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{base_url}}/api/admin/ledger/operations",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"operation\": \"PLE_EXPENSE_CHARGE\",\n  \"providerLegalEntityId\": \"{{ple_id}}\",\n  \"amount\": 500,\n  \"currency\": \"INR\",\n  \"status\": \"POSTED\",\n  \"valueDate\": \"2026-02-01\",\n  \"utr\": \"UTR-EXP-001\",\n  \"metadata\": {\n    \"notes\": \"Increase provider expense\"\n  }\n}"
+                }
+              }
+            },
+            {
               "name": "Get Entries",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/ledger/accounts/{{account_id}}/entries?page=1&limit=20&status=&type=&startDate=2025-01-01&endDate=2025-12-31&minAmount=&maxAmount=&description=&sortBy=createdAt&sortOrder=desc"
               }
             },
@@ -918,7 +1415,12 @@
               "name": "Get Statement",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/ledger/accounts/{{account_id}}/statement?startDate=2025-01-01&endDate=2025-12-31&limit=100"
               }
             },
@@ -926,7 +1428,12 @@
               "name": "Get General Ledger",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/ledger/accounts/{{account_id}}/general-ledger?startDate=2025-01-01&endDate=2025-12-31"
               }
             },
@@ -934,7 +1441,12 @@
               "name": "Get Entry",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/ledger/entries/{{entry_id}}"
               }
             },
@@ -942,7 +1454,12 @@
               "name": "Trial Balance",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/ledger/reports/trial-balance"
               }
             },
@@ -950,7 +1467,12 @@
               "name": "Balance Sheet",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/ledger/reports/balance-sheet"
               }
             }
@@ -964,11 +1486,20 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/reports/transactions",
-                "body": { "mode": "raw", "raw": "{}" }
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                }
               }
             },
             {
@@ -976,8 +1507,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{admin_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/admin/reports/accounts/{{account_id}}/statement",
                 "body": {
@@ -990,7 +1527,12 @@
               "name": "List Reports",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/reports"
               }
             },
@@ -998,7 +1540,12 @@
               "name": "Download Report",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/reports/{{report_id}}/download"
               }
             }
@@ -1011,7 +1558,12 @@
               "name": "Get Filters",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{admin_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/admin/filters"
               }
             }
@@ -1026,7 +1578,12 @@
           "name": "Login History",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{merchant_token}}"
+              }
+            ],
             "url": "{{base_url}}/api/merchant/login-history"
           }
         },
@@ -1037,7 +1594,12 @@
               "name": "Get Basic",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/profile/basic"
               }
             },
@@ -1045,7 +1607,12 @@
               "name": "Get Payin",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/profile/payin"
               }
             },
@@ -1053,7 +1620,12 @@
               "name": "Get Payout",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/profile/payout"
               }
             },
@@ -1061,7 +1633,12 @@
               "name": "Get API Keys",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/profile/api-keys"
               }
             },
@@ -1069,7 +1646,12 @@
               "name": "Dashboard Stats",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/dashboard/stats"
               }
             },
@@ -1078,8 +1660,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{merchant_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/merchant/config/callback-url",
                 "body": {
@@ -1092,7 +1680,12 @@
               "name": "Rotate API Secret",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/api-keys/rotate"
               },
               "event": [
@@ -1112,8 +1705,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{merchant_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/merchant/profile",
                 "body": {
@@ -1132,8 +1731,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{merchant_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/merchant/bank-accounts",
                 "body": {
@@ -1157,7 +1762,12 @@
               "name": "List",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/bank-accounts"
               }
             },
@@ -1166,8 +1776,14 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{merchant_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/merchant/bank-accounts/{{bank_account_id}}",
                 "body": {
@@ -1185,7 +1801,12 @@
               "name": "List",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/transactions?page=1&limit=10&status=&type=&category=&providerId=&legalEntityId=&orderId=&providerRef=&utr=&startDate=2025-01-01&endDate=2025-12-31"
               }
             },
@@ -1193,7 +1814,12 @@
               "name": "Get By ID",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/transactions/{{transaction_id}}"
               }
             }
@@ -1206,7 +1832,12 @@
               "name": "Get Entries",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/ledger/accounts/{{account_id}}/entries?page=1&limit=20&status=&type=&startDate=2025-01-01&endDate=2025-12-31&minAmount=&maxAmount=&description=&sortBy=createdAt&sortOrder=desc"
               }
             },
@@ -1214,7 +1845,12 @@
               "name": "Get Statement",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/ledger/accounts/{{account_id}}/statement?startDate=2025-01-01&endDate=2025-12-31&limit=100"
               }
             },
@@ -1222,7 +1858,12 @@
               "name": "Get General Ledger",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/ledger/accounts/{{account_id}}/general-ledger?startDate=2025-01-01&endDate=2025-12-31"
               }
             },
@@ -1230,7 +1871,12 @@
               "name": "Get Entry",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/ledger/entries/{{entry_id}}"
               }
             }
@@ -1244,11 +1890,20 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{merchant_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/merchant/reports/transactions",
-                "body": { "mode": "raw", "raw": "{}" }
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                }
               }
             },
             {
@@ -1256,8 +1911,14 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Authorization", "value": "Bearer {{merchant_token}}" },
-                  { "key": "Content-Type", "value": "application/json" }
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
                 "url": "{{base_url}}/api/merchant/reports/accounts/{{account_id}}/statement",
                 "body": {
@@ -1270,7 +1931,12 @@
               "name": "List Reports",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/reports"
               }
             },
@@ -1278,7 +1944,12 @@
               "name": "Download Report",
               "request": {
                 "method": "GET",
-                "header": [{ "key": "Authorization", "value": "Bearer {{merchant_token}}" }],
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{merchant_token}}"
+                  }
+                ],
                 "url": "{{base_url}}/api/merchant/reports/{{report_id}}/download"
               }
             }
@@ -1310,10 +1981,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-merchant-id", "value": "{{merchant_id}}" },
-              { "key": "x-timestamp", "value": "{{timestamp}}" },
-              { "key": "x-signature", "value": "{{signature}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-merchant-id",
+                "value": "{{merchant_id}}"
+              },
+              {
+                "key": "x-timestamp",
+                "value": "{{timestamp}}"
+              },
+              {
+                "key": "x-signature",
+                "value": "{{signature}}"
+              }
             ],
             "url": "{{payment_url}}/api/payment/payin/initiate",
             "body": {
@@ -1338,10 +2021,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "x-merchant-id", "value": "{{merchant_id}}" },
-              { "key": "x-timestamp", "value": "{{timestamp}}" },
-              { "key": "x-signature", "value": "{{signature}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-merchant-id",
+                "value": "{{merchant_id}}"
+              },
+              {
+                "key": "x-timestamp",
+                "value": "{{timestamp}}"
+              },
+              {
+                "key": "x-signature",
+                "value": "{{signature}}"
+              }
             ],
             "url": "{{payment_url}}/api/payment/payout/initiate",
             "body": {
@@ -1355,11 +2050,62 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "x-merchant-id", "value": "{{merchant_id}}" },
-              { "key": "x-timestamp", "value": "{{timestamp}}" },
-              { "key": "x-signature", "value": "{{signature}}" }
+              {
+                "key": "x-merchant-id",
+                "value": "{{merchant_id}}"
+              },
+              {
+                "key": "x-timestamp",
+                "value": "{{timestamp}}"
+              },
+              {
+                "key": "x-signature",
+                "value": "{{signature}}"
+              }
             ],
             "url": "{{payment_url}}/api/payment/{{order_id}}"
+          }
+        },
+        {
+          "name": "Payin Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-merchant-id",
+                "value": "{{merchant_id}}"
+              },
+              {
+                "key": "x-timestamp",
+                "value": "{{timestamp}}"
+              },
+              {
+                "key": "x-signature",
+                "value": "{{signature}}"
+              }
+            ],
+            "url": "{{payment_url}}/api/payment/payin/status/{{order_id}}"
+          }
+        },
+        {
+          "name": "Payout Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-merchant-id",
+                "value": "{{merchant_id}}"
+              },
+              {
+                "key": "x-timestamp",
+                "value": "{{timestamp}}"
+              },
+              {
+                "key": "x-signature",
+                "value": "{{signature}}"
+              }
+            ],
+            "url": "{{payment_url}}/api/payment/payout/status/{{order_id}}"
           }
         }
       ]
@@ -1371,7 +2117,12 @@
           "name": "Provider Webhook",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": "{{base_url}}/webhook/payin/{{provider_id}}/{{legal_entity_id}}",
             "body": {
               "mode": "raw",

@@ -1,150 +1,334 @@
-# Wisipay Payment API Documentation
+# Payment API Documentation
 
-This document provides technical details for integrating with the Wisipay Payment API, specifically focusing on security, authentication, and error handling.
+This document provides merchant integration details for the Payment API, including request signing (hashing), endpoints, request/response formats, and merchant-facing error codes.
 
-## 1. Authentication & Security Headers
+## 1. Base URL & Endpoints
 
-All requests to the Payment API must include the following HTTP headers:
+Base URL (example): `https://api.example.com`
+
+Merchant Payment endpoints:
+- `POST /api/payment/payin/initiate`
+- `POST /api/payment/payout/initiate`
+- `GET /api/payment/:orderId` (status)
+- `GET /api/payment/payin/status/:orderId` (payin status)
+- `GET /api/payment/payout/status/:orderId` (payout status)
+
+## 2. Authentication & Security Headers
+
+All requests must include these headers:
 
 | Header | Description | Required |
 |--------|-------------|----------|
-| `x-merchant-id` | Your unique Merchant ID (e.g., `MER-XXXXX`) | Yes |
-| `x-timestamp` | Current Unix Timestamp in milliseconds (e.g., `1770323283897`) | Yes |
-| `x-signature` | HMAC-SHA256 signature for the request (see below) | Highly Recommended |
-| `Content-Type` | Must be `application/json` | Yes |
+| `x-merchant-id` | Your Merchant ID (e.g., `MER-XXXXX`) | Yes |
+| `x-timestamp` | Current Unix timestamp in milliseconds | Yes |
+| `x-signature` | HMAC-SHA256 signature (see below) | Yes |
+| `Content-Type` | `application/json` | Yes (for POST) |
 
-> [!IMPORTANT]
-> The `x-timestamp` must be within **60 seconds** of our server time. Requests with expired or future timestamps will be rejected with a `403 Forbidden` error.
+**Timestamp window:** The server only accepts timestamps within **60 seconds** of server time. Requests outside the window return `403 FORBIDDEN`.
 
----
+**IP whitelisting:** If enabled for your account, requests must originate from whitelisted IPs or you will receive `403 IP Not Whitelisted`.
 
-## 2. Signature Generation
+> Status endpoints under `/api/payment/payin/status/:orderId` and `/api/payment/payout/status/:orderId` **require signatures** and are rate‑limited by TPS. Use these endpoints for polling.
 
-To ensure request integrity, Wisipay uses `HMAC-SHA256` signatures.
+## 3. Request Signing (Hashing)
 
-### Standard Signature (Recommended)
+### 3.1 Standard Signature (Recommended)
 
-The signature is calculated by concatenating the raw request body and the `x-timestamp` with a pipe `|` character, then hashing it using your `API Secret`.
+Signature is computed using the exact raw HTTP request body and the timestamp.
 
-**Algorithm:**
-`HMAC-SHA256(RawBody + "|" + Timestamp, API_Secret)`
+**Algorithm**
+```
+HMAC-SHA256( raw_body + "|" + timestamp, API_SECRET )
+```
 
-**Steps:**
-1.  Prepare your request JSON body.
-2.  Obtain the current timestamp in milliseconds.
-3.  Concatenate: `body_string + "|" + timestamp_string`.
-4.  Compute HMAC-SHA256 using your Secret key.
-5.  Pass the resulting hex string in the `x-signature` header.
+**Important**
+- `raw_body` must be the exact string sent on the wire.
+- Do not re-serialize JSON differently before hashing (spacing/ordering changes will break the signature).
+- The server also accepts `x-signature: sha256=<hex>` (the prefix is stripped).
 
-### Legacy Hash (Backward Compatibility)
+**Steps**
+1. Build the JSON request body.
+2. Serialize it to a string (this exact string will be sent).
+3. Get the current timestamp in milliseconds.
+4. Concatenate: `body_string + "|" + timestamp_string`.
+5. Compute HMAC-SHA256 using your API secret.
+6. Put the hex string in `x-signature`.
 
-If `x-signature` is missing, the system looks for a `hash` field inside the JSON body.
+### 3.2 Legacy Body Hash (Backward Compatibility)
 
-**Algorithm:**
-`HMAC-SHA256(amount + "|" + currency + "|" + orderId + "|" + API_Secret, API_Secret)`
+If `x-signature` is missing, the system checks a legacy `hash` field in the body:
 
-*Note: The legacy format uses the secret both as a key and as part of the data string.*
+```
+HMAC-SHA256( amount + "|" + currency + "|" + orderId + "|" + API_SECRET, API_SECRET )
+```
 
----
+This is supported only for older integrations. New integrations must use `x-signature`.
 
-## 3. Error Codes & Responses
+## 4. Order ID Rules
 
-The API uses standard HTTP status codes and a consistent JSON error format.
+- Must be **unique per merchant**.
+- Length **10 to 25** characters.
+- Duplicate `orderId` returns `409 CONFLICT`.
 
-### Error Format
+## 5. Payin Initiate
+
+**Endpoint:** `POST /api/payment/payin/initiate`
+
+**Body**
+- `amount` (number, integer, >= 1)
+- `orderId` (string, 10-25 chars)
+- `paymentMode` (`UPI` or `QR`)
+- `customerName` (string, min 3 chars)
+- `customerEmail` (valid email)
+- `customerPhone` (10-digit Indian mobile)
+- `remarks` (optional)
+- `redirectUrl` (optional URL)
+
+**Response (Success)**
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": "ORDER_12345",
+    "transactionId": "TXN-101",
+    "paymentUrl": "https://checkout.example.com/...",
+    "amount": 500,
+    "status": "PENDING"
+  }
+}
+```
+
+## 6. Payout Initiate
+
+**Endpoint:** `POST /api/payment/payout/initiate`
+
+**Body**
+- `amount` (number, integer, >= 1)
+- `orderId` (string, 10-25 chars)
+- `paymentMode` (`UPI`, `NEFT`, `RTGS`, `IMPS`)
+- `beneficiaryName` (string, min 3 chars)
+- `beneficiaryAccountNumber` (string, required)
+- `beneficiaryIfsc` (string, 11 chars, IFSC format)
+- `beneficiaryBankName` (string, min 3 chars)
+- `remarks` (optional)
+
+**Response (Success)**
+```json
+{
+  "success": true,
+  "data": {
+    "transactionId": "TXN-202",
+    "orderId": "ORDER_98765",
+    "status": "PENDING",
+    "utr": null
+  }
+}
+```
+
+## 7. Status Check
+
+**Endpoints:**  
+- `GET /api/payment/:orderId`  
+- `GET /api/payment/payin/status/:orderId`  
+- `GET /api/payment/payout/status/:orderId`
+
+**Headers:** `x-merchant-id`, `x-timestamp`, `x-signature`
+
+**Note:** For `GET` status calls, the request body is empty. Signature should be computed with `raw_body = ""`.
+
+**Response (Success)**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "TXN-202",
+    "orderId": "ORDER_98765",
+    "type": "PAYOUT",
+    "status": "SUCCESS",
+    "amount": 1000,
+    "netAmount": 1000,
+    "currency": "INR",
+    "utr": "UTR123456789",
+    "createdAt": "2026-02-01T10:10:10.000Z"
+  }
+}
+```
+
+## 8. Merchant Webhook Callback (Outgoing)
+
+When a transaction completes, we notify your callback URL (`payin.callbackUrl` or `payout.callbackUrl`) with a signed payload.
+
+**Headers**
+- `x-merchant-id`
+- `x-timestamp`
+- `x-signature` = `HMAC-SHA256(raw_body + "|" + timestamp, API_SECRET)`
+
+**Body**
+```json
+{
+  "orderId": "ORDER_12345",
+  "transactionId": "TXN-101",
+  "amount": 500,
+  "currency": "INR",
+  "status": "SUCCESS",
+  "utr": "UTR123456",
+  "type": "PAYIN",
+  "timestamp": "2026-02-01T10:10:10.000Z",
+  "hash": "legacy_hash_for_verification"
+}
+```
+
+**Legacy Hash (Body)**
+```
+HMAC-SHA256(amount + "|" + currency + "|" + orderId + "|" + API_SECRET, API_SECRET)
+```
+
+## 9. Error Handling (Merchant-Facing)
+
+**Error Format (Payment Workflow Errors)**
 ```json
 {
   "success": false,
-  "error": "Error message description",
-  "code": "ERROR_CODE",
-  "details": {} 
+  "error": {
+    "code": "PAY_1202",
+    "message": "Amount exceeds maximum limit",
+    "description": "The transaction amount exceeds the maximum allowed limit",
+    "retryable": false
+  }
 }
 ```
 
-### Common Error Codes
+**Error Format (Security/Validation Errors)**
+```json
+{
+  "success": false,
+  "error": "Missing x-merchant-id",
+  "code": "BAD_REQUEST",
+  "details": {}
+}
+```
 
-| HTTP Status | Code | Description |
-|-------------|------|-------------|
-| **400** | `BAD_REQUEST` | Missing required headers, invalid JSON, or validation failure (e.g., invalid email). |
-| **401** | `UNAUTHORIZED` | Invalid `x-merchant-id`. |
-| **403** | `FORBIDDEN` | Possible reasons: <br> - `Timestamp out of range` (Expired request) <br> - `Invalid Signature` <br> - `IP Not Whitelisted` <br> - `Merchant is not active` <br> - `Payin/Payout Service Disabled` <br> - `Active payment channel not found` |
-| **409** | `CONFLICT` | `Order ID already exists`. Duplicate transaction attempt. |
-| **500** | `INTERNAL_ERROR` | Unexpected server error or configuration issue (e.g., missing fees configuration). |
+### 9.1 Security & Validation Errors
 
----
+| HTTP | Code | When |
+|------|------|------|
+| 400 | `BAD_REQUEST` | Missing/invalid headers, malformed JSON, invalid fields |
+| 401 | `UNAUTHORIZED` | Invalid `x-merchant-id` |
+| 403 | `FORBIDDEN` | Invalid signature, timestamp out of range, IP not whitelisted, merchant inactive |
+| 409 | `CONFLICT` | Duplicate `orderId` |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |
 
-## 4. Implementation Examples
+### 9.2 Payment Workflow Error Codes (PAY_xxxx)
 
-### Node.js (JavaScript)
+These codes are merchant-facing unless stated otherwise. Internal errors are masked to `PAY_1901` with message "Unable to process payment".
+
+**Validation (PAY_100x)**
+- `PAY_1001` Invalid transaction amount
+- `PAY_1002` Invalid customer information
+- `PAY_1003` Invalid payment mode
+- `PAY_1004` Invalid beneficiary information
+- `PAY_1005` Duplicate order ID
+- `PAY_1006` Invalid order ID format
+
+**Configuration (PAY_110x)**
+- `PAY_1101` Service disabled
+- `PAY_1102` Routing not configured (masked)
+- `PAY_1103` Channel not found (masked)
+- `PAY_1104` Channel inactive
+- `PAY_1105` Fee config missing (masked)
+- `PAY_1106` Provider config missing (masked)
+
+**Limits & Balance (PAY_120x)**
+- `PAY_1201` Amount below minimum limit
+- `PAY_1202` Amount exceeds maximum limit
+- `PAY_1203` Daily limit exceeded
+- `PAY_1204` Monthly limit exceeded
+- `PAY_1205` Insufficient balance
+
+**Provider Errors (PAY_130x)**
+- `PAY_1301` Provider unavailable (retryable)
+- `PAY_1302` Provider timeout (retryable)
+- `PAY_1303` Provider rejected
+- `PAY_1304` Provider invalid response (masked)
+- `PAY_1305` Provider maintenance (retryable)
+
+**Ledger Errors (PAY_140x)** (masked)
+- `PAY_1401` Ledger hold failed
+- `PAY_1402` Ledger commit failed
+- `PAY_1403` Ledger rollback failed
+- `PAY_1404` Ledger unavailable
+
+**Database Errors (PAY_150x)** (masked except duplicate)
+- `PAY_1501` DB write failed
+- `PAY_1502` DB read failed
+- `PAY_1503` Duplicate transaction detected
+- `PAY_1504` DB connection failed
+
+**Workflow Errors (PAY_160x)** (masked)
+- `PAY_1601` Workflow validation failed
+- `PAY_1602` Workflow execution failed
+- `PAY_1603` Workflow invalid state
+
+**Generic**
+- `PAY_1901` Internal error (masked)
+- `PAY_1999` Unknown error
+
+## 10. Sample Signature (Node.js)
 
 ```javascript
-const crypto = require('crypto');
-const axios = require('axios');
+const crypto = require("crypto");
+const axios = require("axios");
 
-const API_SECRET = 'your_secret_key';
-const MERCHANT_ID = 'your_merchant_id';
-const BASE_URL = 'https://api.wisipay.in/api/payment';
+const API_SECRET = "your_secret_key";
+const MERCHANT_ID = "your_merchant_id";
+const BASE_URL = "https://api.example.com/api/payment";
 
 async function initiatePayin(orderData) {
-    const timestamp = Date.now();
-    const rawBody = JSON.stringify(orderData);
-    
-    // Generate Signature: HMAC-SHA256(RawBody + "|" + Timestamp, Secret)
-    const payload = rawBody + "|" + timestamp;
-    const signature = crypto.createHmac('sha256', API_SECRET)
-                            .update(payload)
-                            .digest('hex');
+  const timestamp = Date.now();
+  const rawBody = JSON.stringify(orderData);
 
-    try {
-        const response = await axios.post(`${BASE_URL}/payin/initiate`, orderData, {
-            headers: {
-                'Content-Type': 'application/json',
-                'x-merchant-id': MERCHANT_ID,
-                'x-timestamp': timestamp,
-                'x-signature': signature
-            }
-        });
-        console.log('Success:', response.data);
-    } catch (error) {
-        console.error('Error:', error.response ? error.response.data : error.message);
+  const payload = rawBody + "|" + timestamp;
+  const signature = crypto
+    .createHmac("sha256", API_SECRET)
+    .update(payload)
+    .digest("hex");
+
+  const response = await axios.post(
+    `${BASE_URL}/payin/initiate`,
+    orderData,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "x-merchant-id": MERCHANT_ID,
+        "x-timestamp": timestamp,
+        "x-signature": signature,
+      },
     }
-}
+  );
 
-// Example Payin Request
-initiatePayin({
-    amount: 500,
-    currency: "INR",
-    orderId: "ORDER_" + Date.now(),
-    customer: { name: "John Doe", email: "john@example.com", phone: "9876543210" },
-    paymentMode: "UPI"
-});
+  console.log(response.data);
+}
 ```
 
-### PHP (cURL)
+## 11. Sample Signature (PHP cURL)
 
 ```php
 <?php
-
 $apiSecret = 'your_secret_key';
 $merchantId = 'your_merchant_id';
-$baseUrl = 'https://api.wisipay.in/api/payment';
+$baseUrl = 'https://api.example.com/api/payment';
 
 $orderData = [
-    "amount" => 500,
-    "currency" => "INR",
-    "orderId" => "ORDER_" . time(),
-    "customer" => [
-        "name" => "John Doe",
-        "email" => "john@example.com",
-        "phone" => "9876543210"
-    ],
-    "paymentMode" => "UPI"
+  "amount" => 500,
+  "orderId" => "ORDER_" . time(),
+  "paymentMode" => "UPI",
+  "customerName" => "John Doe",
+  "customerEmail" => "john@example.com",
+  "customerPhone" => "9876543210"
 ];
 
 $timestamp = round(microtime(true) * 1000);
 $rawBody = json_encode($orderData);
-
-// Generate Signature: HMAC-SHA256(RawBody + "|" + Timestamp, Secret)
 $payload = $rawBody . "|" . $timestamp;
 $signature = hash_hmac('sha256', $payload, $apiSecret);
 
@@ -153,33 +337,21 @@ curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, $rawBody);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'Content-Type: application/json',
-    'x-merchant-id: ' . $merchantId,
-    'x-timestamp: ' . $timestamp,
-    'x-signature: ' . $signature
+  'Content-Type: application/json',
+  'x-merchant-id: ' . $merchantId,
+  'x-timestamp: ' . $timestamp,
+  'x-signature: ' . $signature
 ]);
 
 $response = curl_exec($ch);
 $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-if (curl_errno($ch)) {
-    echo 'Error: ' . curl_error($ch);
-} else {
-    echo "Status Code: $httpCode\n";
-    echo "Response: $response\n";
-}
-
 curl_close($ch);
 
+echo "Status Code: $httpCode\n";
+echo "Response: $response\n";
 ?>
 ```
 
 ---
 
-## 5. IP Whitelisting
-
-By default, API IP whitelisting may be enforced. If enabled for your account, you must provide your server IP addresses to be whitelisted in the Merchant Panel. Requests from unauthorized IPs will return a `403 IP Not Whitelisted` error.
-
----
-
-© 2026 Wisipay Fintech Solutions.
+© 2026 Your Company.

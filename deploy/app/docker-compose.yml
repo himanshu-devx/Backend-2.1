@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  api:
+    image: ${APP_IMAGE}:${APP_TAG}
+    environment:
+      SERVICE: api
+    env_file: ./.env
+    ports:
+      - "${API_PORT:-4000}:4000"
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  payment:
+    image: ${APP_IMAGE}:${APP_TAG}
+    environment:
+      SERVICE: payment
+    env_file: ./.env
+    ports:
+      - "${PAYMENT_PORT:-3000}:3000"
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  worker:
+    image: ${APP_IMAGE}:${APP_TAG}
+    environment:
+      SERVICE: worker
+    env_file: ./.env
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  caddy:
+    image: caddy:2.8.4
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file: ./.env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks:
+      - app_net
+
+networks:
+  app_net:
+    name: app_net
+
+volumes:
+  caddy_data:
+  caddy_config:

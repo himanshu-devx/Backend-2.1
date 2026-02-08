@@ -56,7 +56,7 @@ async function run() {
   const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
   const mongo = new MongoClient(process.env.MONGODB_URI);
   await mongo.connect();
-  const db = mongo.db(process.env.MONGO_DB_NAME || 'smartFintech');
+  const db = mongo.db(process.env.MONGO_DB_NAME || 'app_db');
 
   // Health checks
   {
