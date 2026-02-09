@@ -56,7 +56,7 @@ export const paymentSecurityMiddleware = (
 
     // 2. Timestamp Validation (1 Minute Window)
     if (!skipTimestampCheck) {
-        const timestamp = parseInt(timestampStr, 10);
+        const timestamp = parseInt(timestampStr ?? "", 10);
         if (isNaN(timestamp)) throw BadRequest("Invalid x-timestamp");
 
         const now = Date.now();
@@ -158,7 +158,7 @@ export const paymentSecurityMiddleware = (
         // A. Check x-signature (New Standard: Body + Timeline)
         if (signature && signature.length === 64) {
             // Standard: HMAC-SHA256( rawBody + "|" + timestamp, secret )
-            const payloadString = rawBody + "|" + timestamp;
+            const payloadString = rawBody + "|" + (timestampStr ?? "");
             const computed = crypto.createHmac("sha256", apiSecret).update(payloadString).digest("hex");
 
             if (safeEqual(computed, signature)) {
