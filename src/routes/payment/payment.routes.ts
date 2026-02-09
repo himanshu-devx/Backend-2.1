@@ -12,7 +12,7 @@ const controller = new PaymentController();
 paymentRoutes.post(
     "/payin/initiate",
     extractPaymentIp,
-    paymentSecurityMiddleware("PAYIN"),
+    paymentSecurityMiddleware("PAYIN",{skipSignature:true}),
     validateBody(InitiatePayinSchema),
     (c) => controller.payin(c)
 );
@@ -20,7 +20,7 @@ paymentRoutes.post(
 paymentRoutes.post(
     "/payout/initiate",
     extractPaymentIp,
-    paymentSecurityMiddleware("PAYOUT"),
+    paymentSecurityMiddleware("PAYOUT",{skipSignature:true}),
     validateBody(InitiatePayoutSchema),
     (c) => controller.payout(c)
 );
@@ -28,21 +28,21 @@ paymentRoutes.post(
 paymentRoutes.get(
     "/:orderId",
     extractPaymentIp,
-    paymentSecurityMiddleware("STATUS"),
+    paymentSecurityMiddleware("STATUS",{skipSignature:true}),
     (c) => controller.checkStatus(c)
 );
 
 paymentRoutes.get(
     "/payin/status/:orderId",
     extractPaymentIp,
-    paymentSecurityMiddleware("PAYIN"),
+    paymentSecurityMiddleware("PAYIN",{skipSignature:true}),
     (c) => controller.checkPayinStatus(c)
 );
 
 paymentRoutes.get(
     "/payout/status/:orderId",
     extractPaymentIp,
-    paymentSecurityMiddleware("PAYOUT"),
+    paymentSecurityMiddleware("PAYOUT",{skipSignature:true}),
     (c) => controller.checkPayoutStatus(c)
 );
 
