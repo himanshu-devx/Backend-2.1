@@ -4,10 +4,12 @@ services:
   api:
     image: ${APP_IMAGE}:${APP_TAG}
     environment:
-      SERVICE: api
+      SERVICE: instances/api
     env_file: ./.env
     ports:
       - "${API_PORT:-4000}:4000"
+    init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     networks:
       - app_net
@@ -15,10 +17,12 @@ services:
   payment:
     image: ${APP_IMAGE}:${APP_TAG}
     environment:
-      SERVICE: payment
+      SERVICE: instances/payment
     env_file: ./.env
     ports:
       - "${PAYMENT_PORT:-3000}:3000"
+    init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     networks:
       - app_net
@@ -26,8 +30,10 @@ services:
   worker:
     image: ${APP_IMAGE}:${APP_TAG}
     environment:
-      SERVICE: worker
+      SERVICE: workers/webhook.worker
     env_file: ./.env
+    init: true
+    stop_grace_period: 30s
     restart: unless-stopped
     networks:
       - app_net

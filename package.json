@@ -6,10 +6,8 @@
   "scripts": {
     "dev:api": "tsx watch -r dotenv/config src/instances/api.ts",
     "dev:payment": "tsx watch -r dotenv/config src/instances/payment.ts",
-    "build": "node build.mjs",
-    "start:api": "node dist/instances/api.js",
-    "start:payment": "node dist/instances/payment.js",
-    "start:worker": "node dist/workers/webhook.worker.js",
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json -f -fe .js && npm run build:assets",
+    "build:assets": "mkdir -p dist/libs/fintech-ledger/src/db && cp libs/fintech-ledger/src/db/*.sql dist/libs/fintech-ledger/src/db/",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

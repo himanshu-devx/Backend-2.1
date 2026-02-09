@@ -3,8 +3,11 @@ import { Ledger } from '../core/Ledger';
 import { AccountType, AccountStatus } from '../api/types';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { logger } from '../infra/logger';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const SCHEMA_PATH = path.resolve(__dirname, 'schema.sql');
 const PARTITIONS_PATH = path.resolve(__dirname, 'partitions.sql');
 

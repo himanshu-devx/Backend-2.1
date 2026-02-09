@@ -1,17 +1,18 @@
-FROM node:20-bookworm-slim
+FROM node:20-bookworm-slim AS base
 
 WORKDIR /app
 ENV NODE_ENV=production
-ENV SERVICE=instances/api
 
-RUN apt-get update && apt-get install -y \
+FROM base AS build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
   python3 \
   make \
   g++ \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json* tsconfig.json ./
-RUN npm install --include=dev
+RUN npm ci --include=dev
 
 COPY src ./src
 COPY libs ./libs
@@ -19,4 +20,15 @@ COPY libs ./libs
 RUN npm run build
 RUN npm prune --omit=dev
 
-CMD ["sh", "-c", "node dist/${SERVICE}.js"]
+FROM base AS runner
+
+RUN useradd --create-home --uid 10001 appuser
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY package.json ./
+
+ENV SERVICE=instances/api
+USER appuser
+
+CMD ["sh", "-c", "exec node dist/src/${SERVICE}.js"]
