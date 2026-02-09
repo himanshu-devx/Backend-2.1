@@ -59,7 +59,7 @@ const schema = z.object({
   CRON_LEDGER_EOD: z.string().default("0 30 23 * * *"),
   REPORT_EMAIL_TRANSACTIONS_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(false)),
   REPORT_EMAIL_STATEMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(true)),
-  AMOUNT_UNIT: z.enum(["PAISE", "RUPEES"]).default("PAISE"),
+  AMOUNT_UNIT: z.enum(["PAISE", "RUPEES"]).default("RUPEES"),
 
   // Provider PLE-1 Credentials
   PROVIDER_PLE1_API_KEY: z.string().optional(),

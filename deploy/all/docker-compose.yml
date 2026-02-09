@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   api:
     build:
@@ -5,13 +7,13 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVICE: instances/api
-    env_file: ./.env
+      NODE_ENV: production
+    env_file:
+      - ./.env.prod
     ports:
-      - "${API_PORT:-4000}:4000"
+      - "4000:4000"
     init: true
-    stop_grace_period: 30s
     restart: unless-stopped
-    networks: [ app_net ]
     depends_on:
       postgres:
         condition: service_healthy
@@ -21,6 +23,7 @@ services:
         condition: service_healthy
       otel-collector:
         condition: service_started
+    networks: [ app_net ]
 
   payment:
     build:
@@ -28,13 +31,13 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVICE: instances/payment
-    env_file: ./.env
+      NODE_ENV: production
+    env_file:
+      - ./.env.prod
     ports:
-      - "${PAYMENT_PORT:-3000}:3000"
+      - "3000:3000"
     init: true
-    stop_grace_period: 30s
     restart: unless-stopped
-    networks: [ app_net ]
     depends_on:
       postgres:
         condition: service_healthy
@@ -42,8 +45,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
+    networks: [ app_net ]
 
   worker:
     build:
@@ -51,11 +53,11 @@ services:
       dockerfile: Dockerfile
     environment:
       SERVICE: workers/webhook.worker
-    env_file: ./.env
+      NODE_ENV: production
+    env_file:
+      - ./.env.prod
     init: true
-    stop_grace_period: 30s
     restart: unless-stopped
-    networks: [ app_net ]
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,22 +65,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
+    networks: [ app_net ]
 
   postgres:
     image: postgres:15
-    env_file: ./.env
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    env_file:
+      - ./.env.prod
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -87,16 +83,12 @@ services:
 
   mongodb:
     image: mongo:6
-    env_file: ./.env
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-    ports:
-      - "${MONGO_PORT:-27017}:27017"
+    env_file:
+      - ./.env.prod
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "db.runCommand('ping').ok" ]
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -105,112 +97,62 @@ services:
 
   redis:
     image: redis:7
-    command: [ "redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}" ]
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
     networks: [ app_net ]
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.106.0
+    command: ["--config=/etc/otel/otel-collector.yml"]
+    volumes:
+      - ../monitoring/otel-collector.yml:/etc/otel/otel-collector.yml:ro
+    restart: unless-stopped
+    networks: [ app_net ]
+
   tempo:
     image: grafana/tempo:2.5.0
-    command: [ "-config.file=/etc/tempo/tempo.yml" ]
     volumes:
       - ../monitoring/tempo.yml:/etc/tempo/tempo.yml:ro
       - tempo_data:/var/tempo
-    ports:
-      - "3200:3200"
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.106.0
-    command: [ "--config=/etc/otel/otel-collector.yml" ]
-    volumes:
-      - ../monitoring/otel-collector.yml:/etc/otel/otel-collector.yml:ro
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "8889:8889"
-    depends_on:
-      - tempo
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  grafana:
-    image: grafana/grafana:10.4.3
-    env_file: ./.env
-    ports:
-      - "3001:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ../monitoring/grafana:/etc/grafana/provisioning
-    depends_on:
-      - prometheus
-      - loki
-      - tempo
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  prometheus:
-    image: prom/prometheus:v2.54.0
-    volumes:
-      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    ports:
-      - "9090:9090"
     restart: unless-stopped
     networks: [ app_net ]
 
   loki:
     image: grafana/loki:2.9.8
-    command: [ "-config.file=/etc/loki/loki-config.yml" ]
     volumes:
       - ../monitoring/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki_data:/loki
-    ports:
-      - "3100:3100"
     restart: unless-stopped
     networks: [ app_net ]
 
-  promtail:
-    image: grafana/promtail:2.9.8
-    command: [ "-config.file=/etc/promtail/promtail-config.yml" ]
+  grafana:
+    image: grafana/grafana:10.4.3
+    env_file:
+      - ./.env.prod
     volumes:
-      - ../monitoring/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/log:/var/log:ro
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  node-exporter:
-    image: prom/node-exporter:v1.8.2
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana:/etc/grafana/provisioning
     ports:
-      - "9100:9100"
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
-    ports:
-      - "8080:8080"
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
+      - "3001:3000"
     restart: unless-stopped
     networks: [ app_net ]
 
   caddy:
     image: caddy:2.8.4
-    env_file: ./.env
+    env_file:
+      - ./.env.prod
     ports:
       - "80:80"
       - "443:443"
@@ -226,13 +168,11 @@ volumes:
   mongo_data:
   redis_data:
   grafana_data:
-  prometheus_data:
-  loki_data:
   tempo_data:
+  loki_data:
   caddy_data:
   caddy_config:
 
-
 networks:
   app_net:
-    name: app_net
+    driver: bridge
