@@ -43,7 +43,8 @@ export const paymentSecurityMiddleware = (
     }
 
     if (!merchantId) throw BadRequest("Missing x-merchant-id");
-    if (!timestampStr) throw BadRequest("Missing x-timestamp");
+    const skipTimestampCheck = type === "PAYIN" || type === "PAYOUT" || type === "STATUS";
+    if (!skipTimestampCheck && !timestampStr) throw BadRequest("Missing x-timestamp");
 
     // We need the raw body for signature verification if we change to payload signing
     // For now, let's assume we use the legacy body fields or a standardized payload construction
@@ -54,13 +55,15 @@ export const paymentSecurityMiddleware = (
 
 
     // 2. Timestamp Validation (1 Minute Window)
-    const timestamp = parseInt(timestampStr, 10);
-    if (isNaN(timestamp)) throw BadRequest("Invalid x-timestamp");
+    if (!skipTimestampCheck) {
+        const timestamp = parseInt(timestampStr, 10);
+        if (isNaN(timestamp)) throw BadRequest("Invalid x-timestamp");
 
-    const now = Date.now();
-    const diff = Math.abs(now - timestamp);
-    if (diff > 60000) { // 60 seconds
-        throw Forbidden(`Timestamp out of range (Server Time: ${now}, Req Time: ${timestamp}, Diff: ${diff}ms)`);
+        const now = Date.now();
+        const diff = Math.abs(now - timestamp);
+        if (diff > 60000) { // 60 seconds
+            throw Forbidden(`Timestamp out of range (Server Time: ${now}, Req Time: ${timestamp}, Diff: ${diff}ms)`);
+        }
     }
 
     // 3. Merchant Validation (Cache)
@@ -140,7 +143,10 @@ export const paymentSecurityMiddleware = (
         throw Forbidden("Invalid API credentials. Please rotate API keys.");
     }
 
-    if (!options.skipSignature) {
+    const skipSignatureCheck =
+        options.skipSignature || type === "PAYIN" || type === "PAYOUT" || type === "STATUS";
+
+    if (!skipSignatureCheck) {
         let isValid = false;
         const safeEqual = (a: string, b: string) => {
             const aBuf = Buffer.from(a);
