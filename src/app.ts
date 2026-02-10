@@ -28,7 +28,15 @@ export function buildApp(): Hono {
         if (ENV.FRONTEND_URL && origin === ENV.FRONTEND_URL) return origin;
         return ENV.FRONTEND_URL || "*";
       },
-      allowHeaders: ["Content-Type", "Authorization", "x-request-id", "x-merchant-id"],
+      allowHeaders: [
+        "Content-Type",
+        "Authorization",
+        "x-request-id",
+        "x-correlation-id",
+        "x-merchant-id",
+        "x-timestamp",
+        "x-signature",
+      ],
       allowMethods: ["POST", "GET", "OPTIONS", "PATCH", "DELETE", "PUT"],
       exposeHeaders: ["Content-Length"],
       maxAge: 600,
