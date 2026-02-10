@@ -105,7 +105,7 @@ export const paymentSecurityMiddleware = (
         if (origin) {
             // Simple check: does origin start with trusted URL?
             // E.g. origin: http://localhost:3000, referer: http://localhost:3000/payin
-            if (origin.startsWith(trustedFrontend)) {
+            if (origin && trustedFrontend && origin.startsWith(trustedFrontend)) {
                 isTrustedOrigin = true;
             }
             // Allow localhost in dev/test explicitly if not set in trustedFrontend
