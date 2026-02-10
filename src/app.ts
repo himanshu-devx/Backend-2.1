@@ -23,7 +23,8 @@ export function buildApp(): Hono {
     "*",
     cors({
       origin: (origin) => {
-        if (origin.startsWith("http://localhost:")) return origin;
+        if (!origin) return "*";
+        if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) return origin;
         if (ENV.FRONTEND_URL && origin === ENV.FRONTEND_URL) return origin;
         return ENV.FRONTEND_URL || "*";
       },

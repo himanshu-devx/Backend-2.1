@@ -4,6 +4,7 @@ import { LedgerUtils } from "@/utils/ledger.utils";
 import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
 import { AccountType } from "fintech-ledger";
 import { getISTDate } from "@/utils/date.util";
+import { toDisplayAmount } from "@/utils/money.util";
 
 export class PaymentLedgerService {
     /**
@@ -35,18 +36,20 @@ export class PaymentLedgerService {
         const merchantFees = transaction.fees?.merchantFees;
         if (!merchantFees) throw new Error("Merchant fees not found");
 
+        const txnNetAmount = toDisplayAmount(transaction.netAmount);
+        const merchantFeeTotal = toDisplayAmount(merchantFees.total);
         const credits = [
-            { accountId: merchantPayinAccountId, amount: transaction.netAmount as any }
+            { accountId: merchantPayinAccountId, amount: txnNetAmount as any }
         ];
-        if (Number(merchantFees.total) > 0) {
-            credits.push({ accountId: platformIncomeId, amount: merchantFees.total as any });
+        if (merchantFeeTotal > 0) {
+            credits.push({ accountId: platformIncomeId, amount: merchantFeeTotal as any });
         }
 
         const entryId = await LedgerService.transfer({
             narration: `Payin Success: ${transaction.orderId}`,
             externalRef: transaction.id,
             valueDate: getISTDate(),
-            debits: [{ accountId: providerSettlementId, amount: transaction.amount as any }],
+            debits: [{ accountId: providerSettlementId, amount: toDisplayAmount(transaction.amount) as any }],
             credits,
             status: "POSTED"
         });
@@ -72,21 +75,25 @@ export class PaymentLedgerService {
         const platformIncomeId = LedgerUtils.generateAccountId(ENTITY_TYPE.INCOME, "INCOME", AccountType.INCOME, ENTITY_ACCOUNT_TYPE.INCOME);
 
         const merchantFees = transaction.fees?.merchantFees;
+        const txnAmount = toDisplayAmount(transaction.amount);
+        const txnNetAmount = toDisplayAmount(transaction.netAmount);
+        const merchantFeeTotal = merchantFees ? toDisplayAmount(merchantFees.total) : 0;
+
         const credits = [
-            { accountId: providerSettlementId, amount: transaction.amount as any } // Provider sends full amount to beneficiary
+            { accountId: providerSettlementId, amount: txnAmount as any } // Provider sends full amount to beneficiary
         ];
 
         // If including fees, we debit (amount + fees) from merchant, credit `amount` to provider, `fees` to income
         // Logic: Net Amount deducted from Merchant = Amount + Fees
-        if (merchantFees && Number(merchantFees.total) > 0) {
-            credits.push({ accountId: platformIncomeId, amount: merchantFees.total as any });
+        if (merchantFeeTotal > 0) {
+            credits.push({ accountId: platformIncomeId, amount: merchantFeeTotal as any });
         }
 
         const entryId = await LedgerService.transfer({
             narration: `Payout Initiated: ${transaction.orderId}`,
             externalRef: transaction.id,
             valueDate: getISTDate(),
-            debits: [{ accountId: sourceId, amount: transaction.netAmount as any }], // Deduct total cost
+            debits: [{ accountId: sourceId, amount: txnNetAmount as any }], // Deduct total cost
             credits: credits,
             status: "PENDING"
         });

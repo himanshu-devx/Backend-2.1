@@ -1,14 +1,25 @@
 import { query } from '../infra/postgres';
 import { AccountType } from '../api/types';
 import { normalizeBalance } from '../utils/Accounting';
+import { Money } from '../utils/Money';
 
-interface BalanceNode {
+interface BalanceNodeInternal {
   id: string;
   code: string;
   type: AccountType;
   level: number;
   balance: bigint;
   rawBalance: bigint;
+  children: BalanceNodeInternal[];
+}
+
+interface BalanceNode {
+  id: string;
+  code: string;
+  type: AccountType;
+  level: number;
+  balance: string;
+  rawBalance: string;
   children: BalanceNode[];
 }
 
@@ -30,8 +41,8 @@ export class BalanceSheet {
       values: [],
     });
 
-    const nodes = new Map<string, BalanceNode>();
-    const roots: BalanceNode[] = [];
+    const nodes = new Map<string, BalanceNodeInternal>();
+    const roots: BalanceNodeInternal[] = [];
 
     // 2. Initialize Nodes
     for (const row of res.rows) {
@@ -68,10 +79,10 @@ export class BalanceSheet {
     // 4. Rollup Balances (Post-order traversal)
     this.rollup(roots);
 
-    return roots;
+    return this.toDisplayNodes(roots);
   }
 
-  private rollup(nodes: BalanceNode[]): bigint {
+  private rollup(nodes: BalanceNodeInternal[]): bigint {
     let sum = 0n;
     for (const node of nodes) {
       const childSum = this.rollup(node.children);
@@ -84,6 +95,18 @@ export class BalanceSheet {
     return sum;
   }
 
+  private toDisplayNodes(nodes: BalanceNodeInternal[]): BalanceNode[] {
+    return nodes.map((node) => ({
+      id: node.id,
+      code: node.code,
+      type: node.type,
+      level: node.level,
+      balance: Money.toRupees(node.balance),
+      rawBalance: Money.toRupees(node.rawBalance),
+      children: this.toDisplayNodes(node.children),
+    }));
+  }
+
   /**
    * Formats the tree into a printable string
    */
@@ -91,18 +114,9 @@ export class BalanceSheet {
     let output = '';
     for (const node of nodes) {
       const spaces = '  '.repeat(indent);
-      const normBalance = this.normalize(node.type, node.balance);
-      output += `${spaces}${node.code} (${node.type}): ${normBalance}\n`;
+      output += `${spaces}${node.code} (${node.type}): ${node.balance}\n`;
       output += this.print(node.children, indent + 1);
     }
     return output;
-  }
-
-  /**
-   * Returns positive number for normal balance (e.g. Credit balance for Liability is positive)
-   */
-  private normalize(type: AccountType, balance: bigint): string {
-    const val = type === AccountType.ASSET || type === AccountType.EXPENSE ? balance : -balance; // Invert Liabilities/Equity/Income for display
-    return val.toString();
   }
 }

@@ -5,9 +5,18 @@ import {
 
 const OPERATIONS = Object.values(LEDGER_OPERATION) as [string, ...string[]];
 
+const rupeeAmountSchema = z
+  .number()
+  .positive()
+  .refine((value) => {
+    if (!Number.isFinite(value)) return false;
+    const scaled = Math.round(value * 100);
+    return Math.abs(value - scaled / 100) < 1e-9;
+  }, { message: "Amount must have at most 2 decimal places" });
+
 export const CreateLedgerOperationSchema = z.object({
   operation: z.enum(OPERATIONS),
-  amount: z.number().positive(),
+  amount: rupeeAmountSchema,
   currency: z.string().optional().default("INR"),
   narration: z.string().optional(),
   remarks: z.string().optional(),

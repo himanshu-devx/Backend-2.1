@@ -1,6 +1,6 @@
 export type AccountId = string;
 export type LedgerEntryId = string;
-export type Money = bigint | string;
+export type Money = string | number;
 
 export enum AccountType {
   ASSET = 'ASSET',

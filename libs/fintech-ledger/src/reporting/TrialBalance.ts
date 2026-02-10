@@ -1,16 +1,17 @@
 import { query } from '../infra/postgres';
 import { AccountType } from '../api/types';
 import { normalizeBalance, normalBalanceSide } from '../utils/Accounting';
+import { Money } from '../utils/Money';
 
 export interface TrialBalanceLine {
   accountId: string;
   code: string;
-  debitTotal: bigint;
-  creditTotal: bigint;
-  netBalance: bigint;
-  rawDebitTotal: bigint;
-  rawCreditTotal: bigint;
-  rawNetBalance: bigint;
+  debitTotal: string;
+  creditTotal: string;
+  netBalance: string;
+  rawDebitTotal: string;
+  rawCreditTotal: string;
+  rawNetBalance: string;
   normalBalanceSide: 'DEBIT' | 'CREDIT';
 }
 
@@ -44,15 +45,18 @@ export class TrialBalance {
       const rawDebitTotal = BigInt(row.debit_total);
       const rawCreditTotal = BigInt(row.credit_total);
       const rawNetBalance = BigInt(row.net_balance);
+      const displayDebitTotal = normalizeBalance(type, rawDebitTotal);
+      const displayCreditTotal = normalizeBalance(type, rawCreditTotal);
+      const displayNetBalance = normalizeBalance(type, rawNetBalance);
       return {
         accountId: row.account_id,
         code: row.code,
-        debitTotal: normalizeBalance(type, rawDebitTotal),
-        creditTotal: normalizeBalance(type, rawCreditTotal),
-        netBalance: normalizeBalance(type, rawNetBalance),
-        rawDebitTotal,
-        rawCreditTotal,
-        rawNetBalance,
+        debitTotal: Money.toRupees(displayDebitTotal),
+        creditTotal: Money.toRupees(displayCreditTotal),
+        netBalance: Money.toRupees(displayNetBalance),
+        rawDebitTotal: Money.toRupees(rawDebitTotal),
+        rawCreditTotal: Money.toRupees(rawCreditTotal),
+        rawNetBalance: Money.toRupees(rawNetBalance),
         normalBalanceSide: normalBalanceSide(type),
       };
     });

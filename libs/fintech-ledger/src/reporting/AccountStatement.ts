@@ -1,15 +1,16 @@
 import { query } from '../infra/postgres';
 import { AccountId, AccountType } from '../api/types';
 import { normalizeBalance, normalBalanceSide } from '../utils/Accounting';
+import { Money } from '../utils/Money';
 
 export interface StatementLine {
   date: Date;
   entryId: string;
   description: string;
-  amount: bigint;
-  balanceAfter: bigint;
-  rawAmount: bigint;
-  rawBalanceAfter: bigint;
+  amount: string;
+  balanceAfter: string;
+  rawAmount: string;
+  rawBalanceAfter: string;
   normalBalanceSide: 'DEBIT' | 'CREDIT';
 }
 
@@ -42,14 +43,16 @@ export class AccountStatement {
       const type = row.type as AccountType;
       const rawAmount = BigInt(row.amount);
       const rawBalanceAfter = BigInt(row.balance_after);
+      const displayAmount = normalizeBalance(type, rawAmount);
+      const displayBalanceAfter = normalizeBalance(type, rawBalanceAfter);
       return {
         date: row.created_at,
         entryId: row.entry_id,
         description: row.description,
-        amount: normalizeBalance(type, rawAmount),
-        balanceAfter: normalizeBalance(type, rawBalanceAfter),
-        rawAmount,
-        rawBalanceAfter,
+        amount: Money.toRupees(displayAmount),
+        balanceAfter: Money.toRupees(displayBalanceAfter),
+        rawAmount: Money.toRupees(rawAmount),
+        rawBalanceAfter: Money.toRupees(rawBalanceAfter),
         normalBalanceSide: normalBalanceSide(type),
       };
     });

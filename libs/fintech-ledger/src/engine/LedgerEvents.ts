@@ -11,7 +11,7 @@ export interface LedgerEventPayload {
   description: string;
   externalRef?: string;
   type?: string;
-  lines: { accountId: string; amount: bigint }[];
+  lines: { accountId: string; amount: string }[];
 }
 
 class LedgerEventBus extends EventEmitter {}

@@ -3,6 +3,7 @@ import { LedgerCommand, LedgerEntryId } from '../api/types';
 import { DoubleEntryError, AccountNotFoundError, InsufficientFundsError } from '../api/errors';
 import { getLockOrder } from './LockOrdering';
 import { randomUUID } from 'crypto';
+import { Money } from '../utils/Money';
 
 export class LedgerWriter {
   /**
@@ -27,7 +28,12 @@ export class LedgerWriter {
     }
 
     // 1. Lock Accounts (Batch)
-    const accountIds = [...new Set(command.lines.map((l) => l.accountId))]; // Unique
+    const normalizedLines = command.lines.map((line) => ({
+      ...line,
+      amount: Money.toPaisa(line.amount),
+    }));
+
+    const accountIds = [...new Set(normalizedLines.map((l) => l.accountId))]; // Unique
     const sortedIds = getLockOrder(accountIds);
 
     // Fetch accounts with FOR UPDATE
@@ -66,9 +72,8 @@ export class LedgerWriter {
     let sum = 0n;
     const updates = new Map<string, { newLedger: bigint; newPending: bigint }>();
 
-    for (const line of command.lines) {
-      // Normalize Amount to BigInt
-      const amount = BigInt(line.amount);
+    for (const line of normalizedLines) {
+      const amount = line.amount;
       sum += amount;
 
       const current = accountMap.get(line.accountId)!;
@@ -178,17 +183,17 @@ export class LedgerWriter {
     }
 
     // 5. Bulk Insert Lines
-    if (command.lines.length > 0) {
+    if (normalizedLines.length > 0) {
       // Compute per-line balance_after (important for traceability checks)
       const runningLedger = new Map<string, bigint>();
       for (const [accId, state] of accountMap.entries()) {
         runningLedger.set(accId, state.ledger);
       }
       const lineBalances: bigint[] = [];
-      for (const line of command.lines) {
+      for (const line of normalizedLines) {
         const current = runningLedger.get(line.accountId) || 0n;
         if (posted) {
-          const next = current + BigInt(line.amount);
+          const next = current + line.amount;
           runningLedger.set(line.accountId, next);
           lineBalances.push(next);
         } else {
@@ -200,8 +205,8 @@ export class LedgerWriter {
       const lineParams: (string | bigint)[] = [];
       let lIdx = 1;
 
-      for (let i = 0; i < command.lines.length; i++) {
-        const line = command.lines[i];
+      for (let i = 0; i < normalizedLines.length; i++) {
+        const line = normalizedLines[i];
         const balanceAfter = lineBalances[i];
         lineValues.push(
           `($${lIdx++}, $${lIdx++}, $${lIdx++}, $${lIdx++}::bigint, $${lIdx++}::bigint)`,

@@ -4,9 +4,16 @@ import { LedgerWriter } from './LedgerWriter';
 import { getLockOrder } from './LockOrdering';
 import { runAtomic } from '../infra/atomic';
 import { emitEntryPosted } from './LedgerEvents';
+import { Money } from '../utils/Money';
 
 export class PostingEngine {
   constructor(private pool: Pool, private writer: LedgerWriter) {
+  }
+
+  private validateCommand(cmd: LedgerCommand): void {
+    for (const [idx, line] of cmd.lines.entries()) {
+      Money.assertRupeesInput(line.amount, `lines[${idx}].amount`);
+    }
   }
 
   /**
@@ -14,6 +21,7 @@ export class PostingEngine {
    * Useful for direct transfers where PENDING state is not needed.
    */
   async createPosted(cmd: LedgerCommand): Promise<LedgerEntryId> {
+    this.validateCommand(cmd);
     return runAtomic(async (client: PoolClient) => {
       // Commit as POSTED (true)
       const id = await this.writer.commitEntry(client, cmd, true);
@@ -24,7 +32,7 @@ export class PostingEngine {
         externalRef: cmd.externalRef,
         lines: cmd.lines.map((l) => ({
           accountId: l.accountId,
-          amount: typeof l.amount === 'bigint' ? l.amount : BigInt(l.amount),
+          amount: Money.toRupees(Money.toPaisa(l.amount)),
         })),
       });
       return id;
@@ -38,6 +46,7 @@ export class PostingEngine {
     return runAtomic(async (client: PoolClient) => {
       const ids: LedgerEntryId[] = [];
       for (const cmd of commands) {
+        this.validateCommand(cmd);
         const id = await this.writer.commitEntry(client, cmd, true);
         emitEntryPosted({
           entryId: id,
@@ -45,7 +54,7 @@ export class PostingEngine {
           externalRef: cmd.externalRef,
           lines: cmd.lines.map((l) => ({
             accountId: l.accountId,
-            amount: typeof l.amount === 'bigint' ? l.amount : BigInt(l.amount),
+            amount: Money.toRupees(Money.toPaisa(l.amount)),
           })),
         });
         ids.push(id);
@@ -61,6 +70,7 @@ export class PostingEngine {
     return runAtomic(async (client: PoolClient) => {
       const ids: LedgerEntryId[] = [];
       for (const cmd of commands) {
+        this.validateCommand(cmd);
         const id = await this.writer.commitEntry(client, cmd, false);
         ids.push(id);
       }
@@ -73,6 +83,7 @@ export class PostingEngine {
    * Requires a subsequent POST to finalize.
    */
   async createPending(cmd: LedgerCommand): Promise<LedgerEntryId> {
+    this.validateCommand(cmd);
     return runAtomic(async (client: PoolClient) => {
       // Commit as PENDING (false)
       const id = await this.writer.commitEntry(client, cmd, false);
@@ -165,7 +176,10 @@ export class PostingEngine {
         entryId,
         description: entry.description,
         externalRef: entry.external_ref || undefined,
-        lines,
+        lines: lines.map((l) => ({
+          accountId: l.accountId,
+          amount: Money.toRupees(l.amount),
+        })),
       });
     });
   }
@@ -254,7 +268,10 @@ export class PostingEngine {
           entryId,
           description: entry.description,
           externalRef: entry.external_ref || undefined,
-          lines,
+          lines: lines.map((l) => ({
+            accountId: l.accountId,
+            amount: Money.toRupees(l.amount),
+          })),
         });
       }
     });
@@ -288,7 +305,7 @@ export class PostingEngine {
         correlationId: entryId,
         lines: lines.map((l: { account_id: string; amount: string }) => ({
           accountId: l.account_id,
-          amount: -BigInt(l.amount), // Invert Amount (Keep as BigInt for internal logic, usually Command expects Money(string|bigint))
+          amount: Money.toRupees(-BigInt(l.amount)), // Invert in paisa -> rupees
         })),
       };
 
@@ -301,7 +318,7 @@ export class PostingEngine {
         externalRef: command.externalRef,
         lines: command.lines.map((l) => ({
           accountId: l.accountId,
-          amount: typeof l.amount === 'bigint' ? l.amount : BigInt(l.amount),
+          amount: Money.toRupees(Money.toPaisa(l.amount)),
         })),
       });
 
@@ -426,7 +443,7 @@ export class PostingEngine {
       status: r.status,
       lines: lRes.rows.map((l: any) => ({
         accountId: l.account_id,
-        amount: BigInt(l.amount)
+        amount: Money.toRupees(BigInt(l.amount))
       })),
       metadata: r.metadata
     };
@@ -454,7 +471,7 @@ export class PostingEngine {
         status: r.status,
         lines: lRes.rows.map((l: any) => ({
           accountId: l.account_id,
-          amount: BigInt(l.amount)
+          amount: Money.toRupees(BigInt(l.amount))
         })),
         metadata: r.metadata
       });
@@ -462,14 +479,14 @@ export class PostingEngine {
     return entries;
   }
 
-  async getBalance(accountId: AccountId): Promise<{ ledger: bigint; pending: bigint }> {
+  async getBalance(accountId: AccountId): Promise<{ ledger: string; pending: string }> {
     const res = await this.pool.query(`SELECT ledger_balance, pending_balance FROM accounts WHERE id = $1`, [
       accountId,
     ]);
     if (res.rowCount === 0) throw new Error('Account not found');
     return {
-      ledger: BigInt(res.rows[0].ledger_balance),
-      pending: BigInt(res.rows[0].pending_balance),
+      ledger: Money.toRupees(BigInt(res.rows[0].ledger_balance)),
+      pending: Money.toRupees(BigInt(res.rows[0].pending_balance)),
     };
   }
 
@@ -495,9 +512,9 @@ export class PostingEngine {
       }
 
       return {
-        old: oldBalance.toString(),
-        new: newBalance.toString(),
-        diff: (newBalance - oldBalance).toString()
+        old: Money.toRupees(oldBalance),
+        new: Money.toRupees(newBalance),
+        diff: Money.toRupees(newBalance - oldBalance)
       };
     });
   }
@@ -524,8 +541,9 @@ export class PostingEngine {
     parentId?: string,
     isHeader = false,
     status = 'ACTIVE',
-    minBalance: bigint = 0n
+    minBalance: string | number = 0
   ): Promise<void> {
+    const minBalancePaisa = Money.toPaisa(minBalance);
     await this.pool.query(
       `INSERT INTO accounts (id, code, type, allow_overdraft, parent_id, is_header, status, min_balance) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -534,7 +552,7 @@ export class PostingEngine {
          type = $3,
          allow_overdraft = $4,
          min_balance = $8`,
-      [id, code, type, allowOverdraft, parentId || null, isHeader, status, minBalance]
+      [id, code, type, allowOverdraft, parentId || null, isHeader, status, minBalancePaisa]
     );
   }
 
@@ -543,7 +561,7 @@ export class PostingEngine {
     updates: {
       status?: string;
       allowOverdraft?: boolean;
-      minBalance?: bigint;
+      minBalance?: string | number;
       type?: string;
     }
   ): Promise<void> {
@@ -562,7 +580,7 @@ export class PostingEngine {
     }
     if (updates.minBalance !== undefined) {
       fields.push(`min_balance = $${idx++}`);
-      values.push(updates.minBalance);
+      values.push(Money.toPaisa(updates.minBalance));
     }
     if (updates.type !== undefined) {
       fields.push(`type = $${idx++}`);
@@ -585,13 +603,13 @@ export class PostingEngine {
       id: r.id,
       code: r.code,
       type: r.type,
-      ledgerBalance: BigInt(r.ledger_balance),
-      pendingBalance: BigInt(r.pending_balance),
+      ledgerBalance: Money.toRupees(BigInt(r.ledger_balance)),
+      pendingBalance: Money.toRupees(BigInt(r.pending_balance)),
       allowOverdraft: r.allow_overdraft,
       status: r.status,
       isHeader: r.is_header,
       createdAt: r.created_at,
-      minBalance: BigInt(r.min_balance)
+      minBalance: Money.toRupees(BigInt(r.min_balance))
     }));
   }
 
@@ -603,13 +621,13 @@ export class PostingEngine {
       id: r.id,
       code: r.code,
       type: r.type,
-      ledgerBalance: BigInt(r.ledger_balance),
-      pendingBalance: BigInt(r.pending_balance),
+      ledgerBalance: Money.toRupees(BigInt(r.ledger_balance)),
+      pendingBalance: Money.toRupees(BigInt(r.pending_balance)),
       allowOverdraft: r.allow_overdraft,
       status: r.status,
       isHeader: r.is_header,
       createdAt: r.created_at,
-      minBalance: BigInt(r.min_balance)
+      minBalance: Money.toRupees(BigInt(r.min_balance))
     };
   }
 
@@ -620,13 +638,13 @@ export class PostingEngine {
       id: r.id,
       code: r.code,
       type: r.type,
-      ledgerBalance: BigInt(r.ledger_balance),
-      pendingBalance: BigInt(r.pending_balance),
+      ledgerBalance: Money.toRupees(BigInt(r.ledger_balance)),
+      pendingBalance: Money.toRupees(BigInt(r.pending_balance)),
       allowOverdraft: r.allow_overdraft,
       status: r.status,
       isHeader: r.is_header,
       createdAt: r.created_at,
-      minBalance: BigInt(r.min_balance)
+      minBalance: Money.toRupees(BigInt(r.min_balance))
     }));
   }
 
@@ -637,13 +655,13 @@ export class PostingEngine {
       id: r.id,
       code: r.code,
       type: r.type,
-      ledgerBalance: BigInt(r.ledger_balance),
-      pendingBalance: BigInt(r.pending_balance),
+      ledgerBalance: Money.toRupees(BigInt(r.ledger_balance)),
+      pendingBalance: Money.toRupees(BigInt(r.pending_balance)),
       allowOverdraft: r.allow_overdraft,
       status: r.status,
       isHeader: r.is_header,
       createdAt: r.created_at,
-      minBalance: BigInt(r.min_balance)
+      minBalance: Money.toRupees(BigInt(r.min_balance))
     }));
   }
 
@@ -662,11 +680,14 @@ export class PostingEngine {
     // This is used by report_excel.ts
     // Return simple array or object for now
     const accounts = await this.getAllAccounts();
-    const totalBalance = accounts.reduce((sum, a) => sum + (BigInt(a.ledgerBalance)), 0n);
+    const totalBalancePaisa = accounts.reduce(
+      (sum, a) => sum + Money.toPaisa(a.ledgerBalance as any),
+      0n,
+    );
     return {
       accounts,
-      totalBalance,
-      isBalanced: totalBalance === 0n
+      totalBalance: Money.toRupees(totalBalancePaisa),
+      isBalanced: totalBalancePaisa === 0n
     };
   }
 }

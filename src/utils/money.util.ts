@@ -35,20 +35,12 @@ export const toDisplayAmountMaybe = (value: unknown): number | undefined => {
   return toDisplayAmount(num);
 };
 
-// Ledger balances may already be normalized (decimal) even when AMOUNT_UNIT=PAISE.
-// This helper preserves normalized values and only divides when the value looks like paise.
+// Ledger outputs are now always rupees. Do not scale; only parse to number.
 export const toDisplayAmountFromLedger = (value: unknown): number => {
   if (value === null || value === undefined) return 0;
   const num = toNumber(value);
   if (num === undefined) return 0;
-  if (!isPaise()) return num;
-
-  const isNormalized =
-    (typeof value === "string" && value.includes(".")) ||
-    (typeof value === "number" && !Number.isInteger(value));
-
-  if (isNormalized) return num;
-  return Number((num / PAISA_FACTOR).toFixed(2));
+  return num;
 };
 
 export const toStorageAmountMaybe = (value: unknown): number | undefined => {

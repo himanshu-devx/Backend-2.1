@@ -19,6 +19,15 @@ const PARTY_TYPES = Object.values(
   TransactionPartyType
 ) as [string, ...string[]];
 
+const rupeeAmountSchema = z
+  .number()
+  .positive()
+  .refine((value) => {
+    if (!Number.isFinite(value)) return false;
+    const scaled = Math.round(value * 100);
+    return Math.abs(value - scaled / 100) < 1e-9;
+  }, { message: "Amount must have at most 2 decimal places" });
+
 export const LedgerAccountRefSchema = z
   .object({
     accountId: z.string().min(1).optional(),
@@ -69,7 +78,7 @@ export const AccountDetailsSchema = z
 
 export const CreateLedgerTransferSchema = z.object({
   type: z.enum(TRANSACTION_TYPES).optional(),
-  amount: z.number().positive(),
+  amount: rupeeAmountSchema,
   currency: z.string().optional().default("INR"),
   narration: z.string().optional(),
   remarks: z.string().optional(),

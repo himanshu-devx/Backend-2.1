@@ -1,17 +1,18 @@
 import { query } from '../infra/postgres';
 import { AccountId, AccountType } from '../api/types';
 import { normalizeBalance, normalBalanceSide } from '../utils/Accounting';
+import { Money } from '../utils/Money';
 
 export interface GeneralLedgerSummary {
   accountId: string;
-  openingBalance: bigint;
-  debitTotal: bigint;
-  creditTotal: bigint;
-  closingBalance: bigint;
-  rawOpeningBalance: bigint;
-  rawDebitTotal: bigint;
-  rawCreditTotal: bigint;
-  rawClosingBalance: bigint;
+  openingBalance: string;
+  debitTotal: string;
+  creditTotal: string;
+  closingBalance: string;
+  rawOpeningBalance: string;
+  rawDebitTotal: string;
+  rawCreditTotal: string;
+  rawClosingBalance: string;
   normalBalanceSide: 'DEBIT' | 'CREDIT';
 }
 
@@ -69,14 +70,14 @@ export class GeneralLedger {
 
     return {
       accountId,
-      openingBalance: normalizeBalance(type, openingBalance),
-      debitTotal: normalizeBalance(type, debitTotal),
-      creditTotal: normalizeBalance(type, creditTotal),
-      closingBalance: normalizeBalance(type, closingBalance),
-      rawOpeningBalance: openingBalance,
-      rawDebitTotal: debitTotal,
-      rawCreditTotal: creditTotal,
-      rawClosingBalance: closingBalance,
+      openingBalance: Money.toRupees(normalizeBalance(type, openingBalance)),
+      debitTotal: Money.toRupees(normalizeBalance(type, debitTotal)),
+      creditTotal: Money.toRupees(normalizeBalance(type, creditTotal)),
+      closingBalance: Money.toRupees(normalizeBalance(type, closingBalance)),
+      rawOpeningBalance: Money.toRupees(openingBalance),
+      rawDebitTotal: Money.toRupees(debitTotal),
+      rawCreditTotal: Money.toRupees(creditTotal),
+      rawClosingBalance: Money.toRupees(closingBalance),
       normalBalanceSide: normalBalanceSide(type),
     };
   }

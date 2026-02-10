@@ -237,8 +237,8 @@ export class LedgerTransferService {
           fromDetails: data.fromDetails,
           toDetails: data.toDetails,
         },
-        debits: [{ accountId: fromAccountId, amount: amountStored as any }],
-        credits: [{ accountId: toAccountId, amount: amountStored as any }],
+        debits: [{ accountId: fromAccountId, amount: data.amount as any }],
+        credits: [{ accountId: toAccountId, amount: data.amount as any }],
         status: data.status ?? "POSTED",
         actorId: actor.email || actor.id || "system",
       });

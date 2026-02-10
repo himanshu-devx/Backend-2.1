@@ -60,6 +60,7 @@ export class Ledger {
   // --- Account Management ---
 
   async createAccount(input: CreateAccountInput): Promise<void> {
+    Money.assertRupeesInput(input.minBalance ?? '0', 'minBalance');
     await this.engine.createAccount(
       input.id,
       input.code,
@@ -68,7 +69,7 @@ export class Ledger {
       input.parentId,
       input.isHeader ?? false,
       input.status ?? AccountStatus.ACTIVE,
-      Money.toPaisa(input.minBalance ?? '0')
+      input.minBalance ?? '0'
     );
     await AuditService.log('CREATE_ACCOUNT', input.id, input.actorId ?? 'system', {
       code: input.code,
@@ -91,10 +92,13 @@ export class Ledger {
     },
     actorId = 'system'
   ): Promise<void> {
+    if (updates.minBalance !== undefined) {
+      Money.assertRupeesInput(updates.minBalance, 'minBalance');
+    }
     await this.engine.updateAccount(id, {
       status: updates.status,
       allowOverdraft: updates.allowOverdraft,
-      minBalance: updates.minBalance !== undefined ? Money.toPaisa(updates.minBalance) : undefined,
+      minBalance: updates.minBalance !== undefined ? updates.minBalance : undefined,
       type: updates.type
     });
     await AuditService.log('UPDATE_ACCOUNT', id, actorId, updates);
@@ -134,10 +138,10 @@ export class Ledger {
       status: t.status,
       lines: t.lines.map(l => ({
         accountId: l.accountId,
-        amount: Money.toRupees(
-          this.normalizeDisplayBalance(accountTypes.get(l.accountId), BigInt(l.amount)),
+        amount: this.toRupees(
+          this.normalizeDisplayBalance(accountTypes.get(l.accountId), Money.toPaisa(l.amount as any)),
         ),
-        rawAmount: Money.toRupees(BigInt(l.amount)),
+        rawAmount: this.toRupees(Money.toPaisa(l.amount as any)),
         normalBalanceSide: this.normalBalanceSide(accountTypes.get(l.accountId)),
       })),
       metadata: t.metadata
@@ -157,10 +161,10 @@ export class Ledger {
       status: tx.status,
       lines: tx.lines.map(l => ({
         accountId: l.accountId,
-        amount: Money.toRupees(
-          this.normalizeDisplayBalance(accountTypes.get(l.accountId), BigInt(l.amount)),
+        amount: this.toRupees(
+          this.normalizeDisplayBalance(accountTypes.get(l.accountId), Money.toPaisa(l.amount as any)),
         ),
-        rawAmount: Money.toRupees(BigInt(l.amount)),
+        rawAmount: this.toRupees(Money.toPaisa(l.amount as any)),
         normalBalanceSide: this.normalBalanceSide(accountTypes.get(l.accountId)),
       })),
       metadata: tx.metadata
@@ -188,15 +192,16 @@ export class Ledger {
       actorId = 'system',
     } = request;
 
-    const lines: Array<{ accountId: string; amount: bigint }> = [];
+    const lines: Array<{ accountId: string; amount: string }> = [];
     let balanceCheck = 0n;
 
     // Process Debits (Positive Logic: Debit = +Amount)
     if (debits && debits.length > 0) {
       for (const d of debits) {
-        const amt = Money.toPaisa(d.amount);
+        Money.assertRupeesInput(d.amount, 'debit.amount');
+        const amt = Money.toPaisa(d.amount as any);
         if (amt === 0n) throw new InvalidCommandError('Debit amount cannot be 0');
-        lines.push({ accountId: d.accountId, amount: amt });
+        lines.push({ accountId: d.accountId, amount: Money.normalizeRupees(d.amount as any) });
         balanceCheck += amt;
       }
     }
@@ -204,9 +209,10 @@ export class Ledger {
     // Process Credits (Negative Logic: Credit = -Amount)
     if (credits && credits.length > 0) {
       for (const c of credits) {
-        const amt = Money.toPaisa(c.amount);
+        Money.assertRupeesInput(c.amount, 'credit.amount');
+        const amt = Money.toPaisa(c.amount as any);
         if (amt === 0n) throw new InvalidCommandError('Credit amount cannot be 0');
-        lines.push({ accountId: c.accountId, amount: -amt });
+        lines.push({ accountId: c.accountId, amount: Money.negateRupees(c.amount as any) });
         balanceCheck -= amt;
       }
     }
@@ -278,23 +284,25 @@ export class Ledger {
         actorId = 'system',
       } = request;
 
-      const lines: Array<{ accountId: string; amount: bigint }> = [];
+      const lines: Array<{ accountId: string; amount: string }> = [];
       let balanceCheck = 0n;
 
       if (debits && debits.length > 0) {
         for (const d of debits) {
+          Money.assertRupeesInput(d.amount, 'debit.amount');
           const amt = Money.toPaisa(d.amount as any);
           if (amt === 0n) throw new InvalidCommandError('Debit amount cannot be 0');
-          lines.push({ accountId: d.accountId, amount: amt });
+          lines.push({ accountId: d.accountId, amount: Money.normalizeRupees(d.amount as any) });
           balanceCheck += amt;
         }
       }
 
       if (credits && credits.length > 0) {
         for (const c of credits) {
+          Money.assertRupeesInput(c.amount, 'credit.amount');
           const amt = Money.toPaisa(c.amount as any);
           if (amt === 0n) throw new InvalidCommandError('Credit amount cannot be 0');
-          lines.push({ accountId: c.accountId, amount: -amt });
+          lines.push({ accountId: c.accountId, amount: Money.negateRupees(c.amount as any) });
           balanceCheck -= amt;
         }
       }
@@ -397,8 +405,8 @@ export class Ledger {
    */
   async getBalance(accountId: string): Promise<string> {
     const acc = await this.engine.getAccount(accountId);
-    const display = this.normalizeDisplayBalance(acc.type, BigInt(acc.ledgerBalance));
-    return Money.toRupees(display);
+    const display = this.normalizeDisplayBalance(acc.type, Money.toPaisa(acc.ledgerBalance as any));
+    return this.toRupees(display);
   }
 
   /**
@@ -406,11 +414,11 @@ export class Ledger {
    */
   async getBalances(accountId: string): Promise<{ ledger: string; pending: string }> {
     const acc = await this.engine.getAccount(accountId);
-    const ledger = this.normalizeDisplayBalance(acc.type, BigInt(acc.ledgerBalance));
-    const pending = this.normalizeDisplayBalance(acc.type, BigInt(acc.pendingBalance));
+    const ledger = this.normalizeDisplayBalance(acc.type, Money.toPaisa(acc.ledgerBalance as any));
+    const pending = this.normalizeDisplayBalance(acc.type, Money.toPaisa(acc.pendingBalance as any));
     return {
-      ledger: Money.toRupees(ledger),
-      pending: Money.toRupees(pending),
+      ledger: this.toRupees(ledger),
+      pending: this.toRupees(pending),
     };
   }
 
@@ -419,8 +427,8 @@ export class Ledger {
   }
 
   private mapAccount(acc: Account): AccountView {
-    const rawLedger = BigInt(acc.ledgerBalance);
-    const rawPending = BigInt(acc.pendingBalance);
+    const rawLedger = Money.toPaisa(acc.ledgerBalance as any);
+    const rawPending = Money.toPaisa(acc.pendingBalance as any);
     const displayLedger = this.normalizeDisplayBalance(acc.type, rawLedger);
     const displayPending = this.normalizeDisplayBalance(acc.type, rawPending);
     return {
@@ -433,13 +441,20 @@ export class Ledger {
       path: acc.path,
       createdAt: acc.createdAt,
       allowOverdraft: acc.allowOverdraft,
-      minBalance: Money.toRupees(acc.minBalance),
-      ledgerBalance: Money.toRupees(displayLedger),
-      pendingBalance: Money.toRupees(displayPending),
-      rawLedgerBalance: Money.toRupees(rawLedger),
-      rawPendingBalance: Money.toRupees(rawPending),
+      minBalance: this.toRupees(Money.toPaisa(acc.minBalance as any)),
+      ledgerBalance: this.toRupees(displayLedger),
+      pendingBalance: this.toRupees(displayPending),
+      rawLedgerBalance: this.toRupees(rawLedger),
+      rawPendingBalance: this.toRupees(rawPending),
       normalBalanceSide: this.normalBalanceSide(acc.type),
     };
+  }
+
+  private toRupees(amount: string | number | bigint): string {
+    if (typeof amount === 'bigint') {
+      return Money.toRupees(amount);
+    }
+    return Money.normalizeRupees(amount);
   }
 
   private normalizeDisplayBalance(type: AccountType | undefined, amount: bigint): bigint {
