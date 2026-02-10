@@ -21,7 +21,7 @@ try {
   console.error("Failed to start ledger cron jobs (continuing application)", error);
 }
 
-const app = buildApp();
+const app = buildApp("api");
 
 app.use("*", rateLimiter(ENV.RATE_LIMIT_MAX, ENV.RATE_LIMIT_WINDOW));
 app.route("/api/auth", authRoutes);

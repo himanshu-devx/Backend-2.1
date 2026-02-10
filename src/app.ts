@@ -13,7 +13,31 @@ import { ENV } from "./config/env";
 
 import { secureHeaders } from "hono/secure-headers";
 
-export function buildApp(): Hono {
+export type CorsMode = "api" | "payment";
+
+const API_ALLOW_HEADERS = [
+  "Content-Type",
+  "Authorization",
+  "x-request-id",
+  "x-correlation-id",
+  "x-requested-with",
+  "x-merchant-id",
+  "x-timestamp",
+  "x-signature",
+];
+
+const PAYMENT_ALLOW_HEADERS = [
+  "Content-Type",
+  "x-request-id",
+  "x-correlation-id",
+  "x-merchant-id",
+  "x-timestamp",
+  "x-signature",
+];
+
+const ALLOW_METHODS = ["POST", "GET", "OPTIONS", "PATCH", "DELETE", "PUT"];
+
+export function buildApp(corsMode: CorsMode = "api"): Hono {
   const app = new Hono();
 
   // 1. Security Headers
@@ -23,24 +47,22 @@ export function buildApp(): Hono {
     "*",
     cors({
       origin: (origin) => {
-        if (!origin) return "*";
-        if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) return origin;
+        if (corsMode === "payment") return "*";
+        if (!origin) return null;
+        if (
+          origin.startsWith("http://localhost:") ||
+          origin.startsWith("http://127.0.0.1:")
+        ) {
+          return origin;
+        }
         if (ENV.FRONTEND_URL && origin === ENV.FRONTEND_URL) return origin;
-        return ENV.FRONTEND_URL || "*";
+        return null;
       },
-      allowHeaders: [
-        "Content-Type",
-        "Authorization",
-        "x-request-id",
-        "x-correlation-id",
-        "x-merchant-id",
-        "x-timestamp",
-        "x-signature",
-      ],
-      allowMethods: ["POST", "GET", "OPTIONS", "PATCH", "DELETE", "PUT"],
+      allowHeaders: corsMode === "payment" ? PAYMENT_ALLOW_HEADERS : API_ALLOW_HEADERS,
+      allowMethods: ALLOW_METHODS,
       exposeHeaders: ["Content-Length"],
       maxAge: 600,
-      credentials: true,
+      credentials: corsMode === "api",
     })
   );
 

@@ -9,7 +9,7 @@ import { rateLimiter } from "@/middlewares/rate-limiter";
 import { serve } from "@hono/node-server";
 
 await bootstrap();
-const app = buildApp();
+const app = buildApp("payment");
 
 // Payment specific middlewares
 app.use("*", rateLimiter(ENV.RATE_LIMIT_MAX, ENV.RATE_LIMIT_WINDOW));
