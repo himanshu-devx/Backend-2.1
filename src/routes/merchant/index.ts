@@ -49,11 +49,6 @@ merchantRoutes.get(
   handler(MerchantSelfController.getOwnPayoutConfig)
 );
 
-merchantRoutes.get(
-  "/profile/api-keys",
-  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-  handler(MerchantSelfController.getOwnApiKeys)
-);
 
 merchantRoutes.get(
   "/api-keys/secret",
