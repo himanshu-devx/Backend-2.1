@@ -99,7 +99,7 @@ export const paymentSecurityMiddleware = (
     if (isWhitelistEnabled) {
         // Domain-Based Bypass (Dashboard / Frontend)
         const origin = c.req.header("origin") || c.req.header("referer");
-        const trustedFrontend = ENV.FRONTEND_URL || "http://localhost:3000";
+        const trustedFrontend = ENV.FRONTEND_URL || null;
         let isTrustedOrigin = false;
 
         if (origin) {

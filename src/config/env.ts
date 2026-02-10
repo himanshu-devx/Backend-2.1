@@ -4,7 +4,7 @@ const schema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
-  PAYMENT_PORT: z.coerce.number().default(3000),
+  PAYMENT_PORT: z.coerce.number().default(4001),
   LOG_LEVEL: z.string().default("info"),
   SERVICE_NAME: z.string().default("app-service"),
   MONGODB_URI: z.string().startsWith("mongodb"),

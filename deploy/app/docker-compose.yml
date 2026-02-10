@@ -20,7 +20,7 @@ services:
       SERVICE: instances/payment
     env_file: ./.env
     ports:
-      - "${PAYMENT_PORT:-3000}:3000"
+      - "${PAYMENT_PORT:-4001}:4001"
     init: true
     stop_grace_period: 30s
     restart: unless-stopped

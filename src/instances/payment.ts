@@ -29,8 +29,8 @@ app.get(
   })
 );
 
-// Use a designated port for Payment Service, fallback to 3001 to avoid conflict with API (3000)
-const port = Number(ENV.PAYMENT_PORT) || 3000;
+// Use a designated port for Payment Service, fallback to 3001 to avoid conflict with API (4001)
+const port = Number(ENV.PAYMENT_PORT) || 4001;
 console.log(`Payment Instance is running on port ${port}`);
 
 serve({

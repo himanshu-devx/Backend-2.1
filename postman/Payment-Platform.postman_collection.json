@@ -10,7 +10,7 @@
     },
     {
       "key": "payment_url",
-      "value": "http://localhost:3000"
+      "value": "http://localhost:4001"
     },
     {
       "key": "admin_token",

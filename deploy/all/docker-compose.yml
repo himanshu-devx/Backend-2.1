@@ -35,7 +35,7 @@ services:
     env_file:
       - ./.env.prod
     ports:
-      - "3000:3000"
+      - "4001:4001"
     init: true
     restart: unless-stopped
     depends_on:

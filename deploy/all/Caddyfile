@@ -15,7 +15,7 @@
 
 {$PAYMENT_DOMAIN} {
   encode zstd gzip
-  reverse_proxy payment:3000 {
+  reverse_proxy payment:4001 {
     header_up -X-Forwarded-For
     header_up -X-Real-IP
     header_up X-Forwarded-For {remote_host}
