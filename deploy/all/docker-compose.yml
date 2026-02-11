@@ -2,7 +2,7 @@ version: "3.9"
 
 services:
   api:
-    image: buddydevx-fintech-backend:latest
+    image: buddydevx/fintech-backend:latest
     environment:
       SERVICE: instances/api
       NODE_ENV: production
@@ -26,7 +26,7 @@ services:
     networks: [ app_net ]
 
   payment:
-    image: buddydevx-fintech-backend:latest
+    image: buddydevx/fintech-backend:latest
     environment:
       SERVICE: instances/payment
       NODE_ENV: production
@@ -48,7 +48,7 @@ services:
     networks: [ app_net ]
 
   worker:
-    image: buddydevx-fintech-backend:latest
+    image: buddydevx/fintech-backend:latest
     environment:
       SERVICE: workers/webhook.worker
       NODE_ENV: production
