@@ -52,8 +52,8 @@ const baseEmailLayout = (bodyContentHtml: string) => `
               </div>
               
               <div style="${baseStyles.footer}">
-                  <p>Questions? Contact our support team: <a href="mailto:${ENV.MAILERSEND_FROM_EMAIL
-  }" style="color: ${COLORS.primary}; text-decoration: none;">${ENV.MAILERSEND_FROM_EMAIL
+                  <p>Questions? Contact our support team: <a href="mailto:${ENV.MAIL_FROM_EMAIL || ENV.SMTP_USER
+  }" style="color: ${COLORS.primary}; text-decoration: none;">${ENV.MAIL_FROM_EMAIL || ENV.SMTP_USER
   }</a></p>
                   <p>This is an automated message. Please do not reply directly. | &copy; ${new Date().getFullYear()} ${ENV.APP_BRAND_NAME
   }.</p>

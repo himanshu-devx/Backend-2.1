@@ -38,6 +38,7 @@ export interface PayinRequest {
   returnUrlFailure?: string;
   remarks?: string;
   description?: string;
+  paymentMode?: string;
   mode?: string;
   currency?: string;
   city?: string;

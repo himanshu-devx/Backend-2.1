@@ -3,6 +3,7 @@ import { ProviderConfig } from "./types";
 import { BaseProvider } from "./base-provider";
 import { DummyProvider } from "./dummy.provider";
 import { SabioPayProvider } from "./sabiopay.provider";
+import { EaseMyNeedsProvider } from "./easemyneeds.provider";
 
 type CredentialKeyMap = Record<string, string>;
 
@@ -36,6 +37,14 @@ const SabioPayCredentialsSchema = z
   })
   .strict();
 
+const EaseMyNeedsCredentialsSchema = z
+  .object({
+    apiKey: z.string().min(1),
+    apiSalt: z.string().min(1),
+    baseUrl: z.string().url().optional(),
+  })
+  .strict();
+
 export const PROVIDER_REGISTRY = {
   dummy: {
     credentialsSchema: DummyCredentialsSchema,
@@ -45,6 +54,10 @@ export const PROVIDER_REGISTRY = {
   sabiopay: {
     credentialsSchema: SabioPayCredentialsSchema,
     create: (config) => new SabioPayProvider(config),
+  },
+  easemyneeds: {
+    credentialsSchema: EaseMyNeedsCredentialsSchema,
+    create: (config) => new EaseMyNeedsProvider(config),
   },
 
 } satisfies Record<string, ProviderRegistration<Record<string, string>>>;

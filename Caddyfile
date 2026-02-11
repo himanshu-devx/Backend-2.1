@@ -1,0 +1,12 @@
+api.paysixfintech.net {
+    reverse_proxy api:4000
+}
+
+payment.paysixfintech.net {
+    reverse_proxy payment:4001
+}
+
+app.paysixfintech.net {
+    reverse_proxy frontend:3000
+}
+

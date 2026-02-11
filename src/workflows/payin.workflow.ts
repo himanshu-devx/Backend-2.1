@@ -196,6 +196,7 @@ export class PayinWorkflow extends BasePaymentWorkflow<
                     customerName: dto.customerName,
                     customerEmail: dto.customerEmail,
                     customerPhone: dto.customerPhone,
+                    paymentMode: dto.paymentMode,
                     callbackUrl,
                     redirectUrl: dto.redirectUrl,
                     remarks: dto.remarks || "Payin",
