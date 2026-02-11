@@ -21,17 +21,9 @@ const schema = z.object({
   POSTGRES_DB: z.string().default("app_ledger"),
   POSTGRES_POOL_MAX: z.string().default("20"),
 
-  SMTP_HOST: z.string().min(1),
-  SMTP_PORT: z.coerce.number().default(587),
-
-  // FIXED
-  SMTP_SECURE: z.preprocess(
-    (v) => (typeof v === "string" ? v === "true" : v),
-    z.boolean().default(false)
-  ),
-
-  SMTP_USER: z.string().min(1),
-  SMTP_PASS: z.string().min(1),
+  MAILERSEND_API_KEY: z.string().min(1),
+  MAILERSEND_FROM_EMAIL: z.string().email(),
+  MAILERSEND_FROM_NAME: z.string().optional(),
 
   APP_BRAND_NAME: z.string().default("Your App"),
   APP_BRAND_PREFIX: z.string().optional(),
@@ -86,11 +78,9 @@ export const ENV: Env = schema.parse({
   POSTGRES_DB: process.env.POSTGRES_DB,
   POSTGRES_POOL_MAX: process.env.POSTGRES_POOL_MAX,
 
-  SMTP_HOST: process.env.SMTP_HOST,
-  SMTP_PORT: process.env.SMTP_PORT,
-  SMTP_SECURE: process.env.SMTP_SECURE,
-  SMTP_USER: process.env.SMTP_USER,
-  SMTP_PASS: process.env.SMTP_PASS,
+  MAILERSEND_API_KEY: process.env.MAILERSEND_API_KEY,
+  MAILERSEND_FROM_EMAIL: process.env.MAILERSEND_FROM_EMAIL,
+  MAILERSEND_FROM_NAME: process.env.MAILERSEND_FROM_NAME,
 
   APP_BRAND_NAME: process.env.APP_BRAND_NAME,
   APP_BASE_URL: process.env.APP_BASE_URL,
