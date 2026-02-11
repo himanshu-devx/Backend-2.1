@@ -130,7 +130,7 @@ Ensure DNS for **Grafana** points to the **Monitoring Server** IP. Loki/Tempo/Pr
 
 ## Single‑Server (All‑in‑One) Deployment
 
-Use this when you want **one server** running app + database + monitoring + caddy.
+Use this when you want **one server** running app + database + monitoring + Traefik.
 
 1. Copy env template:
 ```
@@ -138,9 +138,9 @@ cp deploy/all/.env.example deploy/all/.env.prod
 ```
 2. Update these values in `deploy/all/.env.prod`:
 - `JWT_SECRET`, `API_SECRET_ENC_KEY`
-- SMTP settings
+- Email settings
 - `APP_BASE_URL`, `FRONTEND_URL`
-- `CADDY_EMAIL`, `API_DOMAIN`, `PAYMENT_DOMAIN`
+- `TRAEFIK_ACME_EMAIL`, `API_DOMAIN`, `PAYMENT_DOMAIN`
 
 3. Start:
 ```
