@@ -94,7 +94,7 @@ services:
   postgres:
     image: postgres:15
     env_file:
-      - ./.env.prod
+      - ./.env.backend
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -108,7 +108,7 @@ services:
   mongodb:
     image: mongo:6
     env_file:
-      - ./.env.prod
+      - ./.env.backend
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -164,7 +164,7 @@ services:
   grafana:
     image: grafana/grafana:10.4.3
     env_file:
-      - ./.env.prod
+      - ./.env.backend
     volumes:
       - grafana_data:/var/lib/grafana
       - ../monitoring/grafana:/etc/grafana/provisioning
