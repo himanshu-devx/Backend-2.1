@@ -7,7 +7,7 @@ services:
       SERVICE: instances/api
       NODE_ENV: production
     env_file:
-      - ./.env.prod
+      - ./env.backend
     volumes:
       - reports_data:/data/reports
     init: true
@@ -35,7 +35,7 @@ services:
       SERVICE: instances/payment
       NODE_ENV: production
     env_file:
-      - ./.env.prod
+      - ./env.backend
     volumes:
       - reports_data:/data/reports
     init: true
@@ -55,13 +55,25 @@ services:
         condition: service_healthy
     networks: [ app_net ]
 
+  frontend:
+    image: buddydevx/fintech-dashboard:latest
+    env_file:
+      - ./env.dashboard
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - api
+      - payment
+    networks: [ app_net ]
+
   worker:
     image: buddydevx/fintech-backend:latest
     environment:
       SERVICE: workers/webhook.worker
       NODE_ENV: production
     env_file:
-      - ./.env.prod
+      - ./env.backend
     volumes:
       - reports_data:/data/reports
     init: true
