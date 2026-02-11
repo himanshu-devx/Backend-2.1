@@ -1,7 +1,3 @@
-{
-  email {$CADDY_EMAIL}
-  auto_https on
-}
 
 {$API_DOMAIN} {
   encode zstd gzip
