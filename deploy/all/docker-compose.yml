@@ -10,6 +10,8 @@ services:
       - ./env.backend
     volumes:
       - reports_data:/data/reports
+    ports:
+      - "4000:4000"
     init: true
     restart: unless-stopped
     labels:
@@ -38,6 +40,8 @@ services:
       - ./env.backend
     volumes:
       - reports_data:/data/reports
+    ports:
+      - "4001:4001"
     init: true
     restart: unless-stopped
     labels:
