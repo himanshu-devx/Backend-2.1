@@ -6,7 +6,6 @@ import authRoutes from "@/routes/auth";
 import { ENV } from "@/config/env";
 import adminRoutes from "@/routes/admin";
 import merchantRoutes from "@/routes/merchant";
-import paymentRoutes from "@/routes/payment/payment.routes";
 import webhookRoutes from "@/routes/payment/webhook.routes";
 import { rateLimiter } from "@/middlewares/rate-limiter";
 import "@/infra/otel-sdk";
@@ -16,7 +15,7 @@ import { startLedgerJobs } from "@/jobs/ledger.jobs";
 await bootstrap();
 
 try {
-  // startLedgerJobs();
+  startLedgerJobs();
 } catch (error) {
   console.error("Failed to start ledger cron jobs (continuing application)", error);
 }
@@ -27,7 +26,6 @@ app.use("*", rateLimiter(ENV.RATE_LIMIT_MAX, ENV.RATE_LIMIT_WINDOW));
 app.route("/api/auth", authRoutes);
 app.route("/api/admin", adminRoutes);
 app.route("/api/merchant", merchantRoutes);
-app.route("/api/payment", paymentRoutes);
 app.route("/webhook", webhookRoutes);
 
 

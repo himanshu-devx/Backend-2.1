@@ -462,6 +462,18 @@ export function mapToPaymentError(error: any): PaymentError {
         });
     }
 
+    // Provider config / routing errors
+    if (
+        error.message?.includes("No credentials for") ||
+        error.message?.includes("Multiple credentials found for provider") ||
+        error.message?.includes("Unsupported provider") ||
+        error.message?.includes("Provider not found")
+    ) {
+        return new PaymentError(PaymentErrorCode.PROVIDER_CONFIG_MISSING, {
+            originalError: error.message
+        });
+    }
+
     // If already a PaymentError, return as-is
     if (error instanceof PaymentError) {
         return error;

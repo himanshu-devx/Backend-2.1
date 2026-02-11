@@ -3,10 +3,16 @@ import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 import { AppError } from "@/utils/error";
 
-export abstract class BasePaymentWorkflow<T_DTO> {
+export abstract class BasePaymentWorkflow<
+    T_DTO,
+    T_RES = any,
+    T_GATEWAY = any
+> {
     protected merchant: any;
     protected requestIp: string;
     protected transaction!: TransactionDocument;
+    private currentStepIndex: number = -1;
+    private currentSteps: string[] = [];
 
     constructor(merchant: any, requestIp: string) {
         this.merchant = merchant;
@@ -16,29 +22,38 @@ export abstract class BasePaymentWorkflow<T_DTO> {
     /**
      * Main Execution Template
      */
-    async execute(dto: T_DTO): Promise<any> {
+    async execute(dto: T_DTO): Promise<T_RES> {
+        this.currentSteps = this.buildStepList();
         try {
             logger.info(`[Workflow] Starting ${this.getWorkflowName()} for merchant ${this.merchant.id}`);
 
             // 1. Initial Checks & Context
+            this.logStep(0, dto);
             await this.prepare(dto);
 
             // 2. Business Validations (Limits, Routing, Fees)
+            this.logStep(1, dto);
             await this.validate(dto);
 
             let result: any;
 
             if (this.shouldPersistBeforeGateway()) {
                 // DB-First (Payout)
+                this.logStep(2, dto);
                 await this.persist(dto);
+                this.logStep(3, dto);
                 await this.preExecute(dto);
+                this.logStep(4, dto);
                 result = await this.gatewayCall(dto);
             } else {
                 // Provider-First (Payin)
+                this.logStep(2, dto);
                 result = await this.gatewayCall(dto);
                 // Only persist if gateway call was "successful" (returned intent)
                 if (result.success || result.status === 'PENDING') {
+                    this.logStep(3, dto);
                     await this.persist(dto, result);
+                    this.logStep(4, dto);
                     await this.preExecute(dto);
                 } else {
                     throw new AppError(result.message || "Provider failed to initiate", { status: 400 });
@@ -46,11 +61,14 @@ export abstract class BasePaymentWorkflow<T_DTO> {
             }
 
             // 6. Post-Gateway Logic (Commit, Updates)
+            this.logStep(5, dto);
             await this.postExecute(result);
 
+            this.logStep(6, dto);
             return this.formatResponse(result);
 
         } catch (error: any) {
+            this.logFailureSteps(error, dto);
             await this.handleFailure(error);
             throw error;
         }
@@ -80,7 +98,10 @@ export abstract class BasePaymentWorkflow<T_DTO> {
      * Save the transaction to DB. 
      * In Provider-First mode, the provider result is passed.
      */
-    protected abstract persist(dto: T_DTO, gatewayResult?: any): Promise<void>;
+    protected abstract persist(
+        dto: T_DTO,
+        gatewayResult?: T_GATEWAY
+    ): Promise<void>;
 
     /**
      * Hook for pre-gateway financial steps (e.g. Ledger Holds)
@@ -92,25 +113,33 @@ export abstract class BasePaymentWorkflow<T_DTO> {
     /**
      * Perform the actual provider API call
      */
-    protected abstract gatewayCall(dto: T_DTO): Promise<any>;
+    protected abstract gatewayCall(dto: T_DTO): Promise<T_GATEWAY>;
 
     /**
      * Hook for post-gateway logic
      */
-    protected async postExecute(result: any): Promise<void> {
+    protected async postExecute(_result: T_GATEWAY): Promise<void> {
         // Optional hook
     }
 
     /**
      * Format the final response for the controller
      */
-    protected abstract formatResponse(result: any): any;
+    protected abstract formatResponse(result: T_GATEWAY): T_RES;
 
     /**
      * Global Failure Handler
      */
     protected async handleFailure(error: any): Promise<void> {
-        logger.error(`[Workflow: ${this.getWorkflowName()}] Failed: ${error.message}`);
+        const ctx: Record<string, any> = {
+            workflow: this.getWorkflowName(),
+        };
+        if (this.transaction) {
+            ctx.transactionId = this.transaction.id;
+            ctx.orderId = this.transaction.orderId;
+        }
+
+        logger.error(ctx, `[Workflow] Failed: ${error.message}`);
 
         if (this.transaction) {
             this.transaction.status = TransactionStatus.FAILED;
@@ -132,5 +161,62 @@ export abstract class BasePaymentWorkflow<T_DTO> {
     // Helper: Round to 2 decimal places
     protected round(val: number): number {
         return Math.round((val + Number.EPSILON) * 100) / 100;
+    }
+
+    private buildStepList(): string[] {
+        if (this.shouldPersistBeforeGateway()) {
+            return [
+                "prepare",
+                "validate",
+                "persist",
+                "preExecute",
+                "gatewayCall",
+                "postExecute",
+                "formatResponse",
+            ];
+        }
+        return [
+            "prepare",
+            "validate",
+            "gatewayCall",
+            "persist",
+            "preExecute",
+            "postExecute",
+            "formatResponse",
+        ];
+    }
+
+    private logStep(stepIndex: number, dto: T_DTO): void {
+        this.currentStepIndex = stepIndex;
+        const stepName = this.currentSteps[stepIndex] || `step_${stepIndex + 1}`;
+        const ctx: Record<string, any> = {
+            workflow: this.getWorkflowName(),
+            step: stepName,
+            stepNumber: stepIndex + 1,
+            totalSteps: this.currentSteps.length,
+        };
+        const orderId = (dto as any)?.orderId;
+        if (orderId) ctx.orderId = orderId;
+        if (this.transaction?.id) ctx.transactionId = this.transaction.id;
+        logger.info(ctx, "[Workflow] Step");
+    }
+
+    private logFailureSteps(error: any, dto: T_DTO): void {
+        const stepName = this.currentSteps[this.currentStepIndex] || "unknown";
+        const pendingSteps =
+            this.currentStepIndex >= 0
+                ? this.currentSteps.slice(this.currentStepIndex + 1)
+                : this.currentSteps;
+        const ctx: Record<string, any> = {
+            workflow: this.getWorkflowName(),
+            currentStep: stepName,
+            currentStepNumber: this.currentStepIndex + 1,
+            pendingSteps,
+            error: error?.message,
+        };
+        const orderId = (dto as any)?.orderId;
+        if (orderId) ctx.orderId = orderId;
+        if (this.transaction?.id) ctx.transactionId = this.transaction.id;
+        logger.error(ctx, "[Workflow] Failure with pending steps");
     }
 }

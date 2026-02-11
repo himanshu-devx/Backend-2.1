@@ -4,7 +4,7 @@ import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { NotFound } from "@/utils/error";
-import { ProviderClient } from "@/services/provider/provider-client.service";
+import { ProviderClient } from "@/services/provider-config/provider-client.service";
 
 export class StatusSyncWorkflow {
     async execute(merchantId: string, orderId: string): Promise<TransactionDocument> {
@@ -23,16 +23,31 @@ export class StatusSyncWorkflow {
         const ple = await CacheService.getChannelById(transaction.providerLegalEntityId);
         if (!ple) return transaction;
 
-        const provider = ProviderClient.getProvider(ple.id);
-
-        logger.info(`[StatusSync] Syncing ${transaction.id} with ${ple.providerId}`);
-        const result = await ProviderClient.execute(ple.id, "status", () =>
-            provider.checkStatus({
-                transactionId: transaction.id,
-                providerTransactionId: transaction.providerRef,
-                type: transaction.type as 'PAYIN' | 'PAYOUT'
-            })
+        const provider = await ProviderClient.getProviderForRouting(
+            ple.providerId,
+            ple.legalEntityId
         );
+
+        logger.info(
+            {
+                orderId: transaction.orderId,
+                transactionId: transaction.id,
+                providerId: ple.providerId,
+                legalEntityId: ple.legalEntityId
+            },
+            "[StatusSync] Syncing status"
+        );
+        const statusRequest = {
+            transactionId: transaction.id,
+            providerTransactionId: transaction.providerRef,
+        };
+
+        const result = await ProviderClient.execute(ple.id, "status", () => {
+            if (transaction.type === "PAYOUT") {
+                return provider.checkPayoutStatus(statusRequest);
+            }
+            return provider.checkPayinStatus(statusRequest);
+        });
 
         // 4. State Transition (Workflow Step)
         if (result.status && result.status !== transaction.status) {
@@ -43,6 +58,14 @@ export class StatusSyncWorkflow {
                 timestamp: getISTDate(),
                 payload: { old: transaction.status, new: result.status }
             });
+            logger.info(
+                {
+                    orderId: transaction.orderId,
+                    transactionId: transaction.id,
+                    status: transaction.status
+                },
+                "[StatusSync] Status updated"
+            );
 
             if (result.status === "SUCCESS") {
                 if (transaction.type === "PAYIN") {

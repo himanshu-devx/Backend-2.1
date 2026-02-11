@@ -9,13 +9,22 @@ Base URL (example): `https://api.example.com`
 Merchant Payment endpoints:
 - `POST /api/payment/payin/initiate`
 - `POST /api/payment/payout/initiate`
+- `POST /api/payment/uat/payin/initiate` (UAT)
+- `POST /api/payment/uat/payout/initiate` (UAT)
 - `GET /api/payment/:orderId` (status)
 - `GET /api/payment/payin/status/:orderId` (payin status)
 - `GET /api/payment/payout/status/:orderId` (payout status)
+- `GET /api/payment/uat/:orderId` (UAT status)
+- `GET /api/payment/uat/payin/status/:orderId` (UAT payin status)
+- `GET /api/payment/uat/payout/status/:orderId` (UAT payout status)
+
+Merchant Profile / API Keys endpoints:
+- `GET /merchant/api-keys` (get merchantId + apiSecret)
+- `POST /merchant/api-keys` (rotate and return new apiSecret)
 
 ## 2. Authentication & Security Headers
 
-All requests must include these headers:
+All requests must include these headers unless explicitly noted:
 
 | Header | Description | Required |
 |--------|-------------|----------|
@@ -42,7 +51,7 @@ HMAC-SHA256( raw_body + "|" + timestamp, API_SECRET )
 ```
 
 **Important**
-- `raw_body` must be the exact string sent on the wire.
+- `raw_body` must be the exact string sent on the wire (including key order and spacing).
 - Do not re-serialize JSON differently before hashing (spacing/ordering changes will break the signature).
 - The server also accepts `x-signature: sha256=<hex>` (the prefix is stripped).
 
@@ -53,6 +62,10 @@ HMAC-SHA256( raw_body + "|" + timestamp, API_SECRET )
 4. Concatenate: `body_string + "|" + timestamp_string`.
 5. Compute HMAC-SHA256 using your API secret.
 6. Put the hex string in `x-signature`.
+
+**For GET requests**
+- `raw_body` is an empty string: `""`
+- Signature = `HMAC-SHA256("|" + timestamp, API_SECRET)`
 
 ### 3.2 Legacy Body Hash (Backward Compatibility)
 
@@ -74,15 +87,29 @@ This is supported only for older integrations. New integrations must use `x-sign
 
 **Endpoint:** `POST /api/payment/payin/initiate`
 
+**Response Type**
+```ts
+type PayinInitiateResponse = {
+  orderId: string;
+  transactionId: string;
+  paymentUrl?: string;
+  amount: number;
+  status: "PENDING" | "SUCCESS" | "FAILED" | "EXPIRED" | "REVERSED" | "PROCESSING";
+};
+```
+
 **Body**
+**Required**
 - `amount` (number, integer, >= 1)
 - `orderId` (string, 10-25 chars)
-- `paymentMode` (`UPI` or `QR`)
+- `paymentMode` (`UPI`, `QR`, or `INTENT`)
 - `customerName` (string, min 3 chars)
 - `customerEmail` (valid email)
 - `customerPhone` (10-digit Indian mobile)
-- `remarks` (optional)
-- `redirectUrl` (optional URL)
+
+**Optional**
+- `remarks` (string)
+- `redirectUrl` (URL)
 
 **Response (Success)**
 ```json
@@ -102,7 +129,18 @@ This is supported only for older integrations. New integrations must use `x-sign
 
 **Endpoint:** `POST /api/payment/payout/initiate`
 
+**Response Type**
+```ts
+type PayoutInitiateResponse = {
+  transactionId: string;
+  orderId: string;
+  status: "PENDING" | "SUCCESS" | "FAILED" | "EXPIRED" | "REVERSED" | "PROCESSING";
+  utr?: string;
+};
+```
+
 **Body**
+**Required**
 - `amount` (number, integer, >= 1)
 - `orderId` (string, 10-25 chars)
 - `paymentMode` (`UPI`, `NEFT`, `RTGS`, `IMPS`)
@@ -110,7 +148,10 @@ This is supported only for older integrations. New integrations must use `x-sign
 - `beneficiaryAccountNumber` (string, required)
 - `beneficiaryIfsc` (string, 11 chars, IFSC format)
 - `beneficiaryBankName` (string, min 3 chars)
-- `remarks` (optional)
+
+**Optional**
+- `beneficiaryPhone` (10-digit Indian mobile)
+- `remarks` (string)
 
 **Response (Success)**
 ```json
@@ -131,10 +172,69 @@ This is supported only for older integrations. New integrations must use `x-sign
 - `GET /api/payment/:orderId`  
 - `GET /api/payment/payin/status/:orderId`  
 - `GET /api/payment/payout/status/:orderId`
+ - `GET /api/payment/uat/:orderId`
+ - `GET /api/payment/uat/payin/status/:orderId`
+ - `GET /api/payment/uat/payout/status/:orderId`
 
 **Headers:** `x-merchant-id`, `x-timestamp`, `x-signature`
 
 **Note:** For `GET` status calls, the request body is empty. Signature should be computed with `raw_body = ""`.
+
+## 7.1 UAT System (Merchant Testing)
+
+UAT endpoints mimic the production request/response format and **require the same signature** headers.
+
+**Behavior**
+- Returns static UAT responses (random IDs)
+- Rate limit: **2 requests/second** per merchant per type
+- Sends callback to your configured `payin.callbackUrl` / `payout.callbackUrl` after ~2 seconds
+- UAT status is stored in Redis for 24h
+
+**Required headers for UAT**
+- `x-merchant-id`
+- `x-timestamp`
+- `x-signature`
+
+**UAT Payin Response Example**
+```json
+{
+  "success": true,
+  "data": {
+    "orderId": "ORDER_12345",
+    "transactionId": "UAT_PAYIN_ABC123",
+    "paymentUrl": "https://uat.pay/intent/UAT_PAYIN_ABC123",
+    "amount": 500,
+    "status": "PENDING"
+  }
+}
+```
+
+**UAT Payout Response Example**
+```json
+{
+  "success": true,
+  "data": {
+    "transactionId": "UAT_PAYOUT_XYZ123",
+    "orderId": "ORDER_98765",
+    "status": "PENDING",
+    "utr": null
+  }
+}
+```
+
+## 8. Provider Webhook Endpoints (Incoming)
+
+These endpoints are used by payment providers to push transaction updates into the system.
+
+**Gateway providers (require legal entity):**
+- `POST /webhook/payin/:provider/:legalentity`
+- `POST /webhook/payout/:provider/:legalentity`
+- `POST /webhook/common/:provider/:legalentity`
+
+**Bank providers (no legal entity):**
+- `POST /webhook/payin/:provider`
+- `POST /webhook/payout/:provider`
+- `POST /webhook/common/:provider`
 
 **Response (Success)**
 ```json
@@ -154,7 +254,7 @@ This is supported only for older integrations. New integrations must use `x-sign
 }
 ```
 
-## 8. Merchant Webhook Callback (Outgoing)
+## 9. Merchant Webhook Callback (Outgoing)
 
 When a transaction completes, we notify your callback URL (`payin.callbackUrl` or `payout.callbackUrl`) with a signed payload.
 
@@ -183,7 +283,7 @@ When a transaction completes, we notify your callback URL (`payin.callbackUrl` o
 HMAC-SHA256(amount + "|" + currency + "|" + orderId + "|" + API_SECRET, API_SECRET)
 ```
 
-## 9. Error Handling (Merchant-Facing)
+## 10. Error Handling (Merchant-Facing)
 
 **Error Format (Payment Workflow Errors)**
 ```json
@@ -353,5 +453,48 @@ echo "Response: $response\n";
 ```
 
 ---
+
+## 12. Merchant API Keys (Self Service)
+
+These endpoints require a **valid merchant JWT** (same auth as other merchant panel APIs).
+
+### 12.1 Get API Secret
+
+**Endpoint:** `GET /merchant/api-keys`
+
+**Headers**
+- `Authorization: Bearer <JWT>`
+
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "merchantId": "MID-1",
+    "apiSecret": "sk_************************"
+  }
+}
+```
+
+### 12.2 Rotate API Secret
+
+**Endpoint:** `POST /merchant/api-keys`
+
+**Headers**
+- `Authorization: Bearer <JWT>`
+- `Content-Type: application/json`
+
+**Body:** empty
+
+**Response**
+```json
+{
+  "success": true,
+  "data": {
+    "merchantId": "MID-1",
+    "apiSecret": "sk_************************"
+  }
+}
+```
 
 © 2026 Your Company.

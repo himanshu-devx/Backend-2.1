@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { GeneratedReportModel, ReportStatus, ReportType, GeneratedReportDocument } from "@/models/generated-report.model";
 import { TransactionService } from "@/services/transaction.service";
 import { LedgerEntryService } from "@/services/ledger/ledger-entry.service";
@@ -18,7 +19,7 @@ export interface ReportRequest {
 }
 
 export class ReportService {
-    private static STORAGE_DIR = path.join(process.cwd(), "storage", "reports");
+    private static DEFAULT_STORAGE_DIR = path.join(process.cwd(), "storage", "reports");
     private static MAX_REPORT_RECORDS = 50000; // Optimal boundary for stability
     private static emailService: EmailService;
 
@@ -90,7 +91,8 @@ export class ReportService {
             }
 
             const filename = `${report.id}_${Date.now()}.csv`;
-            const filePath = path.join(this.STORAGE_DIR, filename);
+            const storageDir = this.resolveStorageDir();
+            const filePath = path.join(storageDir, filename);
 
             fs.writeFileSync(filePath, csvContent);
             const stats = fs.statSync(filePath);
@@ -116,6 +118,30 @@ export class ReportService {
                 status: ReportStatus.FAILED,
                 error: error.message,
             });
+        }
+    }
+
+    private static resolveStorageDir(): string {
+        const configured = ENV.REPORT_STORAGE_DIR?.trim();
+        const primary = configured && configured.length
+            ? configured
+            : this.DEFAULT_STORAGE_DIR;
+
+        try {
+            if (!fs.existsSync(primary)) {
+                fs.mkdirSync(primary, { recursive: true });
+            }
+            fs.accessSync(primary, fs.constants.W_OK);
+            return primary;
+        } catch (err: any) {
+            if (err?.code !== "EACCES" && err?.code !== "EROFS") {
+                throw err;
+            }
+            const fallback = path.join(os.tmpdir(), "wisipay", "reports");
+            if (!fs.existsSync(fallback)) {
+                fs.mkdirSync(fallback, { recursive: true });
+            }
+            return fallback;
         }
     }
 

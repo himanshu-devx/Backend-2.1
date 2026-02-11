@@ -3,13 +3,17 @@ import { NotFound } from "@/utils/error";
 import { InitiatePayinDto } from "@/dto/payment/payin.dto";
 import { InitiatePayoutDto } from "@/dto/payment/payout.dto";
 import { mapTransactionAmountsToDisplay } from "@/utils/money.util";
+import type {
+  PayinInitiateResponse,
+  PayoutInitiateResponse,
+} from "@/services/payment/payment.types";
 
 export class PaymentService {
   async createPayin(
     merchant: any,
     data: InitiatePayinDto,
     requestIp: string
-  ): Promise<TransactionDocument> {
+  ): Promise<PayinInitiateResponse> {
     const { PayinWorkflow } = await import("@/workflows/payin.workflow");
     const workflow = new PayinWorkflow(merchant, requestIp);
     return workflow.execute(data);
@@ -19,7 +23,7 @@ export class PaymentService {
     merchant: any,
     data: InitiatePayoutDto,
     requestIp: string
-  ): Promise<TransactionDocument> {
+  ): Promise<PayoutInitiateResponse> {
     const { PayoutWorkflow } = await import("@/workflows/payout.workflow");
     const workflow = new PayoutWorkflow(merchant, requestIp);
     return workflow.execute(data);

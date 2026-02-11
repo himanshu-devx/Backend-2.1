@@ -83,34 +83,7 @@ export class MerchantSelfService {
     return ok(fullResult.value.payout);
   }
 
-  static async getOwnApiKeys(id: string) {
-    const fullResult = await MerchantManagementService.getMerchantById(id);
-    if (!fullResult.ok) return fullResult;
-
-    const {
-      panelIpWhitelist,
-      isPanelIpWhitelistEnabled,
-      payin,
-      payout,
-      apiSecretEnabled,
-      apiSecretUpdatedAt,
-    } = fullResult.value;
-
-    return ok({
-      panelIpWhitelist,
-      isPanelIpWhitelistEnabled,
-      payinIpWhitelist: payin?.apiIpWhitelist || [],
-      isPayinIpWhitelistEnabled: payin?.isApiIpWhitelistEnabled || false,
-      payoutIpWhitelist: payout?.apiIpWhitelist || [],
-      isPayoutIpWhitelistEnabled: payout?.isApiIpWhitelistEnabled || false,
-      apiSecretEnabled,
-      apiSecretUpdatedAt,
-      apiKey: fullResult.value.id,
-      id,
-    });
-  }
-
-  static async getOwnApiSecret(id: string) {
+  static async getOwnApiKeySecret(id: string) {
     const merchant = await MerchantModel.findOne({ id }).select(
       "+apiSecretEncrypted"
     );
@@ -124,12 +97,23 @@ export class MerchantSelfService {
       return err(new AppError("API secret not available", { status: 404 }));
     }
 
-    const apiSecret = decryptSecret(merchant.apiSecretEncrypted);
-    if (!apiSecret) {
-      return err(new AppError("Failed to decrypt API secret", { status: 500 }));
-    }
+    const apiSecret = merchant.apiSecretEncrypted ? decryptSecret(merchant.apiSecretEncrypted) : null;
 
-    return ok({ apiKey: merchant.id, apiSecret });
+    return ok({
+      merchantId: merchant.id,
+      apiKey: merchant.id,
+      apiSecret,
+      apiSecretEnabled: merchant.apiSecretEnabled,
+      apiSecretUpdatedAt: merchant.apiSecretUpdatedAt,
+    });
+  }
+
+  static async getOwnApiKeys(id: string) {
+    return this.getOwnApiKeySecret(id);
+  }
+
+  static async getOwnApiSecret(id: string) {
+    return this.getOwnApiKeySecret(id);
   }
 
   // --- NEW FEATURES ---
@@ -183,7 +167,7 @@ export class MerchantSelfService {
   static async rotateApiSecret(
     merchantId: string,
     auditContext?: AuditContext
-  ): Promise<Result<{ apiSecret: string }, AppError>> {
+  ): Promise<Result<{ merchantId: string; apiSecret: string }, AppError>> {
     const merchant = await merchantRepository.findById(merchantId);
     if (!merchant) return err(NotFound("Merchant not found"));
 
@@ -211,7 +195,13 @@ export class MerchantSelfService {
     }
 
     await redis.del(RedisKeys.MERCHANT_CONFIG.API_KEYS(merchantId));
-    return ok({ apiSecret: newSecret });
+    return ok({
+      merchantId,
+      apiKey: merchantId,
+      apiSecret: newSecret,
+      apiSecretEnabled: true,
+      apiSecretUpdatedAt: getISTDate(),
+    });
   }
 
   static async updateSelfProfile(

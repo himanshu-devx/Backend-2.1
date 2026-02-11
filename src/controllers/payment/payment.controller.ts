@@ -4,7 +4,7 @@ import {
   paymentService,
 } from "@/services/payment/payment.service";
 import { AppError, InternalError, BadRequest, Conflict } from "@/utils/error";
-import { AuditLogService } from "@/services/common/audit-log.service";
+import { AuditService } from "@/services/common/audit.service";
 import { PaymentError } from "@/utils/payment-errors.util";
 
 export class PaymentController {
@@ -37,7 +37,22 @@ export class PaymentController {
       // Audit Log might need merchantId even if context fail, try header
       const logMerchantId = merchantId || c.req.header("x-merchant-id") || "UNKNOWN";
 
-      await AuditLogService.logFailure("PAYIN_INITIATE", error, { merchantId: logMerchantId, orderId: body?.orderId }, ip);
+      await AuditService.record({
+        action: "PAYIN_INITIATE",
+        actorType: "MERCHANT",
+        actorId: logMerchantId,
+        entityType: "TRANSACTION",
+        entityId: body?.orderId,
+        ipAddress: ip,
+        metadata: {
+          orderId: body?.orderId,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
 
       if (error instanceof PaymentError || error?.name === "PaymentError") {
         const payload = (error as PaymentError).toMerchantJSON();
@@ -52,6 +67,60 @@ export class PaymentController {
 
       console.error("Payin Unexpected Error:", error);
       throw InternalError(error.message || "Payment request processing failed.");
+    }
+  }
+
+  async payinUat(c: Context) {
+    let merchantId = "";
+    let body: any;
+    const ip = c.get("requestIp");
+
+    try {
+      body = c.get("req_body") || await c.req.json();
+      const merchant = c.get("merchant");
+
+      if (!merchant) {
+        throw InternalError("Merchant context missing");
+      }
+      merchantId = merchant.id;
+
+      const { uatPaymentService } = await import(
+        "@/services/payment/uat-payment.service"
+      );
+      const result = await uatPaymentService.createPayin(merchant, body);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      const logMerchantId = merchantId || c.req.header("x-merchant-id") || "UNKNOWN";
+      await AuditService.record({
+        action: "PAYIN_INITIATE_UAT",
+        actorType: "MERCHANT",
+        actorId: logMerchantId,
+        entityType: "TRANSACTION",
+        entityId: body?.orderId,
+        ipAddress: ip,
+        metadata: {
+          orderId: body?.orderId,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
+
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json(
+          { success: false, ...payload },
+          (error as PaymentError).httpStatus as any || 400
+        );
+      }
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+
+      console.error("Payin UAT Unexpected Error:", error);
+      throw InternalError(error.message || "UAT payin failed.");
     }
   }
 
@@ -74,7 +143,22 @@ export class PaymentController {
     } catch (error: any) {
       const logMerchantId = merchantId || c.req.header("x-merchant-id") || "UNKNOWN";
 
-      await AuditLogService.logFailure("PAYOUT_INITIATE", error, { merchantId: logMerchantId, orderId: body?.orderId }, ip);
+      await AuditService.record({
+        action: "PAYOUT_INITIATE",
+        actorType: "MERCHANT",
+        actorId: logMerchantId,
+        entityType: "TRANSACTION",
+        entityId: body?.orderId,
+        ipAddress: ip,
+        metadata: {
+          orderId: body?.orderId,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
 
       if (error instanceof PaymentError || error?.name === "PaymentError") {
         const payload = (error as PaymentError).toMerchantJSON();
@@ -89,6 +173,60 @@ export class PaymentController {
 
       console.error("Payout Unexpected Error:", error);
       throw InternalError(error.message || "Payout request processing failed.");
+    }
+  }
+
+  async payoutUat(c: Context) {
+    let merchantId = "";
+    let body: any;
+    const ip = c.get("requestIp");
+
+    try {
+      body = c.get("req_body") || await c.req.json();
+      const merchant = c.get("merchant");
+
+      if (!merchant) {
+        throw InternalError("Merchant context missing");
+      }
+      merchantId = merchant.id;
+
+      const { uatPaymentService } = await import(
+        "@/services/payment/uat-payment.service"
+      );
+      const result = await uatPaymentService.createPayout(merchant, body);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      const logMerchantId = merchantId || c.req.header("x-merchant-id") || "UNKNOWN";
+      await AuditService.record({
+        action: "PAYOUT_INITIATE_UAT",
+        actorType: "MERCHANT",
+        actorId: logMerchantId,
+        entityType: "TRANSACTION",
+        entityId: body?.orderId,
+        ipAddress: ip,
+        metadata: {
+          orderId: body?.orderId,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
+
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json(
+          { success: false, ...payload },
+          (error as PaymentError).httpStatus as any || 400
+        );
+      }
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+
+      console.error("Payout UAT Unexpected Error:", error);
+      throw InternalError(error.message || "UAT payout failed.");
     }
   }
 
@@ -111,6 +249,79 @@ export class PaymentController {
     }
   }
 
+  async checkStatusUat(c: Context) {
+    try {
+      const orderId = c.req.param("orderId");
+      const merchant = c.get("merchant");
+
+      if (!merchant) throw InternalError("Merchant context missing");
+
+      const { uatPaymentService } = await import(
+        "@/services/payment/uat-payment.service"
+      );
+      const result = await uatPaymentService.getStatus(merchant.id, orderId);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+      console.error("UAT Status Error:", error);
+      const msg = error.message || "Unknown error";
+      throw InternalError("UAT status check failed: " + msg);
+    }
+  }
+
+  async checkPayinStatusUat(c: Context) {
+    try {
+      const orderId = c.req.param("orderId");
+      const merchant = c.get("merchant");
+
+      if (!merchant) throw InternalError("Merchant context missing");
+
+      const { uatPaymentService } = await import(
+        "@/services/payment/uat-payment.service"
+      );
+      const result = await uatPaymentService.getStatusByType(
+        merchant.id,
+        orderId,
+        "PAYIN"
+      );
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+      console.error("UAT Status Error:", error);
+      const msg = error.message || "Unknown error";
+      throw InternalError("UAT status check failed: " + msg);
+    }
+  }
+
+  async checkPayoutStatusUat(c: Context) {
+    try {
+      const orderId = c.req.param("orderId");
+      const merchant = c.get("merchant");
+
+      if (!merchant) throw InternalError("Merchant context missing");
+
+      const { uatPaymentService } = await import(
+        "@/services/payment/uat-payment.service"
+      );
+      const result = await uatPaymentService.getStatusByType(
+        merchant.id,
+        orderId,
+        "PAYOUT"
+      );
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+      console.error("UAT Status Error:", error);
+      const msg = error.message || "Unknown error";
+      throw InternalError("UAT status check failed: " + msg);
+    }
+  }
   async checkPayinStatus(c: Context) {
     try {
       const orderId = c.req.param("orderId");

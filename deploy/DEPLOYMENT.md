@@ -23,6 +23,29 @@ docker build -t ghcr.io/your-org/your-app:1.0.0 .
 docker push ghcr.io/your-org/your-app:1.0.0
 ```
 
+### One‑Command Docker Hub Push (Recommended)
+
+Use the helper script `deploy/dockerhub/build-push.sh`. It supports a local env file so you don’t have to type secrets each time.
+
+Create a local file **outside the repo** (never commit secrets):
+```
+# ~/.dockerhub.env
+DOCKER_IMAGE=yourdockerhubuser/your-app
+DOCKER_TAG=1.0.0
+DOCKER_USERNAME=yourdockerhubuser
+DOCKER_TOKEN=your_dockerhub_access_token
+```
+
+Run:
+```
+DOCKER_ENV_FILE=~/.dockerhub.env ./deploy/dockerhub/build-push.sh
+```
+
+Optional overrides:
+- `DOCKER_PLATFORM` (default `linux/amd64`)
+- `DOCKERFILE` (default `Dockerfile`)
+- `DOCKER_CONTEXT` (default `.`)
+
 ---
 
 ## 2) App Server Deployment
@@ -100,11 +123,8 @@ OTLP_HTTP_URL=http://<monitoring-server-ip>:4318/v1/traces
 Monitoring Caddy is **included in the Monitoring stack**. Configure it via `deploy/monitoring/.env`:
 - `CADDY_EMAIL`
 - `GRAFANA_DOMAIN`
-- `PROMETHEUS_DOMAIN`
-- `LOKI_DOMAIN`
-- `TEMPO_DOMAIN`
 
-Ensure DNS for those domains points to the **Monitoring Server** IP.
+Ensure DNS for **Grafana** points to the **Monitoring Server** IP. Loki/Tempo/Prometheus do not require DNS.
 
 ---
 
@@ -114,10 +134,9 @@ Use this when you want **one server** running app + database + monitoring + cadd
 
 1. Copy env template:
 ```
-cp deploy/all/.env.example deploy/all/.env
+cp deploy/all/.env.example deploy/all/.env.prod
 ```
-2. Update these values in `deploy/all/.env`:
-- `APP_IMAGE` and `APP_TAG`
+2. Update these values in `deploy/all/.env.prod`:
 - `JWT_SECRET`, `API_SECRET_ENC_KEY`
 - SMTP settings
 - `APP_BASE_URL`, `FRONTEND_URL`

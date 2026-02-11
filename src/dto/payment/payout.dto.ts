@@ -9,7 +9,7 @@ export const InitiatePayoutSchema = z.object({
     orderId: z
         .string()
         .trim()
-        .min(10, "Order ID must be at least 10 characters long")
+        .min(5, "Order ID must be at least 10 characters long")
         .max(25, "Order ID must be at most 25 characters long"),
 
     paymentMode: z.enum(["UPI", "NEFT", "RTGS", "IMPS"]),
@@ -38,6 +38,12 @@ export const InitiatePayoutSchema = z.object({
         .string()
         .trim()
         .min(3, "Bank Name must be at least 3 characters long"),
+
+    beneficiaryPhone: z
+        .string()
+        .trim()
+        .regex(/^[6-9]\d{9}$/, "Invalid Indian mobile number")
+        .optional(),
 
     remarks: z
         .string()

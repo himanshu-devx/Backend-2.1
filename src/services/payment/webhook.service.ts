@@ -5,8 +5,13 @@ export class WebhookService {
     constructor() {
         this.workflow = new WebhookWorkflow();
     }
-    async processWebhook(type: "PAYIN" | "PAYOUT", providerId: string, legalEntityId: string, payload: any) {
-        return this.workflow.execute(type, providerId, legalEntityId, payload);
+    async processWebhook(
+        type: "PAYIN" | "PAYOUT",
+        providerId: string,
+        legalEntityId: string,
+        rawBody: string
+    ) {
+        return this.workflow.execute(type, providerId, legalEntityId, rawBody);
     }
 }
 

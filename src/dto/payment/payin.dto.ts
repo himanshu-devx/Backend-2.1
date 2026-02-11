@@ -9,10 +9,10 @@ export const InitiatePayinSchema = z.object({
     orderId: z
         .string()
         .trim()
-        .min(10, "Order ID must be at least 10 characters long")
+        .min(5, "Order ID must be at least 10 characters long")
         .max(25, "Order ID must be at most 25 characters long"),
 
-    paymentMode: z.enum(["UPI", "QR"]),
+    paymentMode: z.enum(["UPI", "QR", "INTENT"]),
 
     customerName: z
         .string()

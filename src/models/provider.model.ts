@@ -38,15 +38,10 @@ const ProviderSchema = new Schema<ProviderDocument>(
       },
     },
     toObject: { virtuals: true },
-    id: false,
   }
 );
 
 ProviderSchema.pre("save", async function (next) {
-  if (!this.id && this.name) {
-    const { generateSlug } = await import("@/utils/id.util");
-    this.id = generateSlug(this.name);
-  }
   if (!this.displayName && this.name) {
     this.displayName = this.name;
   }

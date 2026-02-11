@@ -28,6 +28,7 @@ const API_ALLOW_HEADERS = [
 
 const PAYMENT_ALLOW_HEADERS = [
   "Content-Type",
+  "Authorization",
   "x-request-id",
   "x-correlation-id",
   "x-merchant-id",

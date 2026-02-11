@@ -43,7 +43,7 @@ export const paymentSecurityMiddleware = (
     }
 
     if (!merchantId) throw BadRequest("Missing x-merchant-id");
-    const skipTimestampCheck = type === "PAYIN" || type === "PAYOUT" || type === "STATUS";
+    const skipTimestampCheck = options.skipSignature === true;
     if (!skipTimestampCheck && !timestampStr) throw BadRequest("Missing x-timestamp");
 
     // We need the raw body for signature verification if we change to payload signing
@@ -125,28 +125,27 @@ export const paymentSecurityMiddleware = (
         }
     }
 
+    const skipSignatureCheck = options.skipSignature === true;
+
     // 5. Signature Verification (optional)
     const apiSecretEncrypted = merchant.apiSecretEncrypted;
 
-    if (!apiSecretEncrypted) {
-        logger.error(`[PaymentSecurity] Merchant ${merchantId} has no API Secret`);
-        throw Forbidden("Merchant configuration error: Secret missing");
-    }
-
-    const apiSecret = decryptSecret(apiSecretEncrypted);
-    if (!apiSecret) {
-        if (looksLikeArgon2Hash(apiSecretEncrypted)) {
-            logger.warn(`[PaymentSecurity] Merchant ${merchantId} has legacy API secret hash; rotation required`);
-        } else {
-            logger.warn(`[PaymentSecurity] Merchant ${merchantId} API secret decryption failed`);
-        }
-        throw Forbidden("Invalid API credentials. Please rotate API keys.");
-    }
-
-    const skipSignatureCheck =
-        options.skipSignature || type === "PAYIN" || type === "PAYOUT" || type === "STATUS";
-
     if (!skipSignatureCheck) {
+        if (!apiSecretEncrypted) {
+            logger.error(`[PaymentSecurity] Merchant ${merchantId} has no API Secret`);
+            throw Forbidden("Merchant configuration error: Secret missing");
+        }
+
+        const apiSecret = decryptSecret(apiSecretEncrypted);
+        if (!apiSecret) {
+            if (looksLikeArgon2Hash(apiSecretEncrypted)) {
+                logger.warn(`[PaymentSecurity] Merchant ${merchantId} has legacy API secret hash; rotation required`);
+            } else {
+                logger.warn(`[PaymentSecurity] Merchant ${merchantId} API secret decryption failed`);
+            }
+            throw Forbidden("Invalid API credentials. Please rotate API keys.");
+        }
+
         let isValid = false;
         const safeEqual = (a: string, b: string) => {
             const aBuf = Buffer.from(a);
@@ -184,6 +183,8 @@ export const paymentSecurityMiddleware = (
         if (!isValid) {
             throw Forbidden("Invalid Signature");
         }
+    } else if (!apiSecretEncrypted) {
+        logger.warn(`[PaymentSecurity] Merchant ${merchantId} has no API Secret (signature skipped)`);
     }
 
     // Attach context

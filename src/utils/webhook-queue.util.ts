@@ -7,10 +7,10 @@ const WEBHOOK_DELAYED_KEY = "webhook:queue:delayed";
 const WEBHOOK_DLQ_KEY = "webhook:queue:dead";
 
 export interface WebhookTask {
-    type: "PAYIN" | "PAYOUT";
+    type: "PAYIN" | "PAYOUT" | "COMMON";
     providerId: string;
     legalEntityId: string;
-    payload: any;
+    rawBody: string;
     receivedAt: Date;
     attempt?: number;
     maxAttempts?: number;
@@ -30,7 +30,15 @@ export class WebhookQueue {
                 maxAttempts: task.maxAttempts ?? WEBHOOK_RETRY_DEFAULTS.MAX_ATTEMPTS
             };
             await redis.lpush(WEBHOOK_QUEUE_KEY, JSON.stringify(fullTask));
-            logger.info(`[WebhookQueue] Enqueued ${task.type} for ${task.providerId}`);
+            logger.info(
+                {
+                    type: task.type,
+                    providerId: task.providerId,
+                    legalEntityId: task.legalEntityId,
+                    rawBodyLength: task.rawBody?.length || 0
+                },
+                "[WebhookQueue] Enqueued webhook"
+            );
         } catch (error: any) {
             logger.error(`[WebhookQueue] Failed to enqueue: ${error.message}`);
         }

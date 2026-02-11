@@ -59,12 +59,10 @@ const schema = z.object({
   CRON_LEDGER_EOD: z.string().default("0 30 23 * * *"),
   REPORT_EMAIL_TRANSACTIONS_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(false)),
   REPORT_EMAIL_STATEMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(true)),
+  REPORT_STORAGE_DIR: z.string().default("/data/reports"),
   AMOUNT_UNIT: z.enum(["PAISE", "RUPEES"]).default("RUPEES"),
 
-  // Provider PLE-1 Credentials
-  PROVIDER_PLE1_API_KEY: z.string().optional(),
-  PROVIDER_PLE1_API_SALT: z.string().optional(),
-  PROVIDER_PLE1_BASE_URL: z.string().url().optional(),
+
 });
 
 export type Env = z.infer<typeof schema>;
@@ -117,10 +115,7 @@ export const ENV: Env = schema.parse({
   CRON_LEDGER_EOD: process.env.CRON_LEDGER_EOD,
   REPORT_EMAIL_TRANSACTIONS_ENABLED: process.env.REPORT_EMAIL_TRANSACTIONS_ENABLED,
   REPORT_EMAIL_STATEMENT_ENABLED: process.env.REPORT_EMAIL_STATEMENT_ENABLED,
+  REPORT_STORAGE_DIR: process.env.REPORT_STORAGE_DIR,
   AMOUNT_UNIT: process.env.AMOUNT_UNIT,
 
-  // Provider PLE-1
-  PROVIDER_PLE1_API_KEY: process.env.PROVIDER_PLE1_API_KEY,
-  PROVIDER_PLE1_API_SALT: process.env.PROVIDER_PLE1_API_SALT,
-  PROVIDER_PLE1_BASE_URL: process.env.PROVIDER_PLE1_BASE_URL,
 });

@@ -258,6 +258,18 @@ export class LedgerEntryService {
 
         // Fetch lines for statement
         const statementLines = await new AccountStatement().getStatement(accountId, limit);
+        const entryAmountById = new Map<string, number>();
+        try {
+            const entryLimit = Math.max(limit, statementLines.length || 0);
+            const entries = await LedgerService.getEntries(accountId, { limit: entryLimit });
+            for (const entry of entries || []) {
+                const line = entry?.lines?.find((l: any) => l.accountId === accountId);
+                if (!line?.amount && line?.amount !== 0) continue;
+                entryAmountById.set(entry.id, toRupeesFromLedger(line.amount));
+            }
+        } catch {
+            // Fallback to statement line amounts if entry lookup fails
+        }
 
         // Use GeneralLedger to get accurate opening balance for the period
         const glReport = await new GeneralLedger().getReport(accountId, start, end);
@@ -268,7 +280,11 @@ export class LedgerEntryService {
             // However, traditionally: Debit (left), Credit (right)
             // For a merchant account (Liability):
             // CREDIT increases balance (Inflow), DEBIT decreases balance (Outflow)
-            const amt = toRupeesFromLedger(line.rawAmount);
+            const preferredAmount = entryAmountById.get(line.entryId);
+            const fallbackAmount = line.amount ?? line.rawAmount ?? 0;
+            const amt = preferredAmount !== undefined
+                ? preferredAmount
+                : toRupeesFromLedger(fallbackAmount);
             const side = classifySide(amt, normalSide);
             return {
                 date: getShiftedISTDate(line.date),

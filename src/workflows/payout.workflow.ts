@@ -1,5 +1,7 @@
 import { BasePaymentWorkflow } from "./base-payment.workflow";
 import { InitiatePayoutDto } from "@/dto/payment/payout.dto";
+import type { PayoutInitiateResponse } from "@/services/payment/payment.types";
+import type { ProviderPayoutResult } from "@/provider-config/types";
 import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { TransactionType, TransactionPartyType } from "@/constants/transaction.constant";
 import { Forbidden } from "@/utils/error";
@@ -11,13 +13,17 @@ import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
 import { AccountType } from "fintech-ledger";
 import { PaymentError, PaymentErrorCode, mapToPaymentError } from "@/utils/payment-errors.util";
 import { PaymentRoutingService } from "@/services/payment/payment-routing.service";
-import { ProviderClient } from "@/services/provider/provider-client.service";
+import { ProviderClient } from "@/services/provider-config/provider-client.service";
 import { TpsService } from "@/services/common/tps.service";
 import { ENV } from "@/config/env";
 import { logger } from "@/infra/logger-instance";
 import { mapFeeDetailToStorage, toStorageAmount } from "@/utils/money.util";
 
-export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
+export class PayoutWorkflow extends BasePaymentWorkflow<
+    InitiatePayoutDto,
+    PayoutInitiateResponse,
+    ProviderPayoutResult
+> {
     private merchantFees: any;
     private providerFees: any;
     private routing: any;
@@ -27,6 +33,10 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
     protected getWorkflowName(): string { return "PAYOUT"; }
 
     protected async prepare(dto: InitiatePayoutDto): Promise<void> {
+        logger.info(
+            { orderId: dto.orderId, merchantId: this.merchant.id },
+            "[PayoutWorkflow] Preparing request"
+        );
         const existingTxn = await TransactionModel.findOne({ orderId: dto.orderId, merchantId: this.merchant.id });
         if (existingTxn) {
             throw new PaymentError(PaymentErrorCode.DUPLICATE_ORDER_ID, { orderId: dto.orderId });
@@ -49,6 +59,14 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
             providerId: this.channel.providerId,
             legalEntityId: this.channel.legalEntityId,
         };
+        logger.info(
+            {
+                orderId: dto.orderId,
+                providerId: this.routing.providerId,
+                legalEntityId: this.routing.legalEntityId
+            },
+            "[PayoutWorkflow] Routing resolved"
+        );
 
         this.merchantFees = this.calculateFees(dto.amount, config.fees);
         this.providerFees = this.calculateFees(dto.amount, this.channel.payout.fees);
@@ -58,7 +76,10 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
         await TpsService.merchant(this.merchant.id, "PAYOUT", config.tps || 0);
     }
 
-    protected async persist(dto: InitiatePayoutDto, gatewayResult?: any): Promise<void> {
+    protected async persist(
+        dto: InitiatePayoutDto,
+        _gatewayResult?: ProviderPayoutResult
+    ): Promise<void> {
         const netAmount = this.round(dto.amount + this.merchantFees.total);
         const amountStored = toStorageAmount(dto.amount);
         const netAmountStored = toStorageAmount(netAmount);
@@ -91,6 +112,15 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
         });
 
         await this.transaction.save();
+        logger.info(
+            {
+                orderId: dto.orderId,
+                transactionId: this.transaction.id,
+                providerId: this.routing.providerId,
+                legalEntityId: this.routing.legalEntityId
+            },
+            "[PayoutWorkflow] Transaction persisted"
+        );
     }
 
     protected async preExecute(dto: InitiatePayoutDto): Promise<void> {
@@ -99,15 +129,30 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
             const entryId = await PaymentLedgerService.initiatePayout(this.transaction);
             this.transaction.meta.set("ledgerPendingEntryId", entryId);
             await this.transaction.save();
+            logger.info(
+                {
+                    orderId: this.transaction.orderId,
+                    transactionId: this.transaction.id,
+                    ledgerEntryId: entryId
+                },
+                "[PayoutWorkflow] Ledger pending entry created"
+            );
         } catch (error: any) {
-            logger.error(`[PayoutWorkflow] Ledger Initiate Failed: ${error.message}`, error);
+            logger.error(
+                {
+                    orderId: this.transaction?.orderId,
+                    transactionId: this.transaction?.id,
+                    error: error.message
+                },
+                "[PayoutWorkflow] Ledger initiate failed"
+            );
             throw new PaymentError(PaymentErrorCode.LEDGER_HOLD_FAILED, {
                 originalError: error.message
             });
         }
     }
 
-    protected async gatewayCall(dto: InitiatePayoutDto): Promise<any> {
+    protected async gatewayCall(dto: InitiatePayoutDto): Promise<ProviderPayoutResult> {
         let lastError: any;
 
         for (const channel of this.channelChain) {
@@ -130,7 +175,20 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
                     await this.transaction.save();
                 }
 
-                const provider = ProviderClient.getProvider(channel.id);
+                const provider = await ProviderClient.getProviderForRouting(
+                    channel.providerId,
+                    channel.legalEntityId
+                );
+                logger.info(
+                    {
+                        orderId: dto.orderId,
+                        transactionId: this.transaction.id,
+                        pleId: channel.id,
+                        providerId: channel.providerId,
+                        legalEntityId: channel.legalEntityId
+                    },
+                    "[PayoutWorkflow] Calling provider"
+                );
 
                 // TPS: provider/PLE level
                 await TpsService.ple(channel.id, "PAYOUT", channel.payout?.tps || 0);
@@ -141,6 +199,7 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
                     beneficiaryAccountNumber: dto.beneficiaryAccountNumber,
                     beneficiaryBankIfsc: dto.beneficiaryIfsc,
                     beneficiaryBankName: dto.beneficiaryBankName,
+                    beneficiaryPhone: dto.beneficiaryPhone,
                     mode: dto.paymentMode,
                     remarks: dto.remarks || "Payout",
                 };
@@ -148,9 +207,36 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
                 const result = await ProviderClient.execute(channel.id, "payout", () =>
                     provider.handlePayout(providerRequest)
                 );
+                logger.info(
+                    {
+                        orderId: dto.orderId,
+                        transactionId: this.transaction.id,
+                        providerId: channel.providerId,
+                        legalEntityId: channel.legalEntityId,
+                        status: result.status,
+                        success: result.success
+                    },
+                    "[PayoutWorkflow] Provider response"
+                );
                 if (!result.success) {
+                    logger.error(
+                        {
+                            orderId: dto.orderId,
+                            transactionId: this.transaction.id,
+                            providerId: channel.providerId,
+                            legalEntityId: channel.legalEntityId,
+                            providerStatus: result.status,
+                            providerMessage: result.message,
+                            providerResponse: result
+                        },
+                        "[PayoutWorkflow] Provider rejected request"
+                    );
                     throw new PaymentError(PaymentErrorCode.PROVIDER_REJECTED, {
-                        providerMessage: result.message
+                        providerId: channel.providerId,
+                        legalEntityId: channel.legalEntityId,
+                        providerStatus: result.status,
+                        providerMessage: result.message,
+                        providerResponse: result,
                     });
                 }
                 return result;
@@ -159,14 +245,22 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
                 if (!ProviderClient.isRetryableError(error)) {
                     throw mapToPaymentError(error);
                 }
-                logger.warn(`[PayoutWorkflow] Provider ${channel.id} failed, trying fallback...`);
+                logger.warn(
+                    {
+                        orderId: dto.orderId,
+                        transactionId: this.transaction?.id,
+                        pleId: channel.id,
+                        error: error.message
+                    },
+                    "[PayoutWorkflow] Provider failed, trying fallback"
+                );
             }
         }
 
         throw mapToPaymentError(lastError || new Error("Provider unavailable"));
     }
 
-    protected async postExecute(result: any): Promise<void> {
+    protected async postExecute(result: ProviderPayoutResult): Promise<void> {
         if (result.success) {
             this.transaction.providerRef = result.providerTransactionId;
             this.transaction.status = result.status as any;
@@ -183,6 +277,15 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
             // Based on requirements: "webhook come if succes then POST ledger".
 
             await this.transaction.save();
+            logger.info(
+                {
+                    orderId: this.transaction.orderId,
+                    transactionId: this.transaction.id,
+                    providerRef: result.providerTransactionId,
+                    status: this.transaction.status
+                },
+                "[PayoutWorkflow] Provider initiated"
+            );
         } else {
             throw new Error(result.message || "Provider payout failed");
         }
@@ -196,10 +299,17 @@ export class PayoutWorkflow extends BasePaymentWorkflow<InitiatePayoutDto> {
         if (this.transaction && this.transaction.meta.get("ledgerPendingEntryId") && !this.transaction.meta.get("ledgerVoided")) {
             await PaymentLedgerService.voidPayout(this.transaction);
             await this.transaction.save();
+            logger.info(
+                {
+                    orderId: this.transaction.orderId,
+                    transactionId: this.transaction.id
+                },
+                "[PayoutWorkflow] Ledger voided after failure"
+            );
         }
     }
 
-    protected formatResponse(result: any): any {
+    protected formatResponse(_result: ProviderPayoutResult): PayoutInitiateResponse {
         return {
             transactionId: this.transaction.id,
             orderId: this.transaction.orderId,

@@ -13,15 +13,19 @@ export interface ProviderLegalEntityDocument extends Document {
   providerId: string;
   legalEntityId: string;
 
-  // Configuration for this pair (e.g. API Keys)
-  config: {
-    apiKeyEncrypted?: string;
-    apiSecretEncrypted?: string;
-    webhookSecretEncrypted?: string;
-  };
-
   payin: SharedServiceConfig;
   payout: SharedServiceConfig;
+
+  // Configurations
+  integration?: {
+    providerType: string;
+    requiredEnvKeys: string[];
+  };
+  webhooks?: {
+    payin: string | null;
+    payout: string | null;
+    common: string | null;
+  };
 
   // Ledger account IDs
   accounts?: {
@@ -51,12 +55,6 @@ const ProviderLegalEntitySchema = new Schema<ProviderLegalEntityDocument>(
       required: true,
     },
 
-    config: {
-      apiKeyEncrypted: String,
-      apiSecretEncrypted: String,
-      webhookSecretEncrypted: String,
-    },
-
     payin: SharedServiceConfigSchema,
     payout: SharedServiceConfigSchema,
 
@@ -68,6 +66,16 @@ const ProviderLegalEntitySchema = new Schema<ProviderLegalEntityDocument>(
         expenseAccountId: { type: String },
       },
       default: {},
+    },
+
+    integration: {
+      providerType: { type: String },
+      requiredEnvKeys: { type: [String], default: [] },
+    },
+    webhooks: {
+      payin: { type: String },
+      payout: { type: String },
+      common: { type: String },
     },
 
     isActive: { type: Boolean, default: true },
@@ -83,17 +91,8 @@ const ProviderLegalEntitySchema = new Schema<ProviderLegalEntityDocument>(
       },
     },
     toObject: { virtuals: true },
-    id: false,
   }
 );
-
-ProviderLegalEntitySchema.pre("save", async function (next) {
-  if (!this.id) {
-    const { generateCustomId } = await import("@/utils/id.util");
-    this.id = await generateCustomId("PLE", "provider_legal_entity");
-  }
-  next();
-});
 
 // Composite unique index
 ProviderLegalEntitySchema.index(

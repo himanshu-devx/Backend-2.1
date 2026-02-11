@@ -1,5 +1,7 @@
 import { BasePaymentWorkflow } from "./base-payment.workflow";
 import { InitiatePayinDto } from "@/dto/payment/payin.dto";
+import type { PayinInitiateResponse } from "@/services/payment/payment.types";
+import type { ProviderPayinResult } from "@/provider-config/types";
 import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { TransactionType, TransactionPartyType } from "@/constants/transaction.constant";
 import { Forbidden } from "@/utils/error";
@@ -9,12 +11,16 @@ import { ENV } from "@/config/env";
 import { logger } from "@/infra/logger-instance";
 import { PaymentError, PaymentErrorCode, mapToPaymentError } from "@/utils/payment-errors.util";
 import { generateCustomId } from "@/utils/id.util";
-import { ProviderClient } from "@/services/provider/provider-client.service";
+import { ProviderClient } from "@/services/provider-config/provider-client.service";
 import { TpsService } from "@/services/common/tps.service";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { mapFeeDetailToStorage, toDisplayAmount, toStorageAmount } from "@/utils/money.util";
 
-export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
+export class PayinWorkflow extends BasePaymentWorkflow<
+    InitiatePayinDto,
+    PayinInitiateResponse,
+    ProviderPayinResult
+> {
     private merchantFees: any;
     private providerFees: any;
     private routing: any;
@@ -29,6 +35,10 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
     }
 
     protected async prepare(dto: InitiatePayinDto): Promise<void> {
+        logger.info(
+            { orderId: dto.orderId, merchantId: this.merchant.id },
+            "[PayinWorkflow] Preparing request"
+        );
         // Double spend check
         const existingTxn = await TransactionModel.findOne({
             orderId: dto.orderId,
@@ -42,6 +52,10 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
         if (!prefix) prefix = "TXN";
 
         this.generatedId = await generateCustomId(prefix, "transaction");
+        logger.info(
+            { orderId: dto.orderId, transactionId: this.generatedId },
+            "[PayinWorkflow] Generated transaction ID"
+        );
     }
 
     protected async validate(dto: InitiatePayinDto): Promise<void> {
@@ -61,12 +75,24 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
             providerId: this.channel.providerId,
             legalEntityId: this.channel.legalEntityId,
         };
+        logger.info(
+            {
+                orderId: dto.orderId,
+                transactionId: this.generatedId,
+                providerId: this.routing.providerId,
+                legalEntityId: this.routing.legalEntityId
+            },
+            "[PayinWorkflow] Routing resolved"
+        );
 
         // Fees
         this.merchantFees = this.calculateFees(dto.amount, config.fees);
     }
 
-    protected async persist(dto: InitiatePayinDto, gatewayResult: any): Promise<void> {
+    protected async persist(
+        dto: InitiatePayinDto,
+        gatewayResult: ProviderPayinResult
+    ): Promise<void> {
         const netAmount = this.round(dto.amount - this.merchantFees.total);
         const amountStored = toStorageAmount(dto.amount);
         const netAmountStored = toStorageAmount(netAmount);
@@ -103,10 +129,27 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
         });
 
         await this.transaction.save();
+        logger.info(
+            {
+                orderId: dto.orderId,
+                transactionId: this.transaction.id,
+                providerId: this.routing.providerId,
+                legalEntityId: this.routing.legalEntityId
+            },
+            "[PayinWorkflow] Transaction persisted"
+        );
     }
 
-    protected async gatewayCall(dto: InitiatePayinDto): Promise<any> {
+    protected async gatewayCall(dto: InitiatePayinDto): Promise<ProviderPayinResult> {
         let lastError: any;
+
+        const existingTxn = await TransactionModel.findOne({
+            orderId: dto.orderId,
+            merchantId: this.merchant.id
+        });
+        if (existingTxn) {
+            throw new PaymentError(PaymentErrorCode.DUPLICATE_ORDER_ID, { orderId: dto.orderId });
+        }
 
         for (const channel of this.channelChain) {
             try {
@@ -126,14 +169,34 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
                 // TPS: provider/PLE level
                 await TpsService.ple(channel.id, "PAYIN", channel.payin?.tps || 0);
 
-                const provider = ProviderClient.getProvider(channel.id);
+                const provider = await ProviderClient.getProviderForRouting(
+                    channel.providerId,
+                    channel.legalEntityId
+                );
+                logger.info(
+                    {
+                        orderId: dto.orderId,
+                        transactionId: this.generatedId,
+                        pleId: channel.id,
+                        providerId: channel.providerId,
+                        legalEntityId: channel.legalEntityId
+                    },
+                    "[PayinWorkflow] Calling provider"
+                );
+                const callbackUrl = await ProviderClient.buildWebhookUrl(
+                    "PAYIN",
+                    this.routing.providerId,
+                    this.routing.legalEntityId
+                );
+
                 const providerRequest = {
                     amount: dto.amount,
                     transactionId: this.generatedId, // Use pre-generated ID
+                    orderId: dto.orderId,
                     customerName: dto.customerName,
                     customerEmail: dto.customerEmail,
                     customerPhone: dto.customerPhone,
-                    callbackUrl: `${ENV.APP_BASE_URL || "http://localhost:4000"}/webhook/payin/${this.routing.providerId}/${this.routing.legalEntityId}`,
+                    callbackUrl,
                     redirectUrl: dto.redirectUrl,
                     remarks: dto.remarks || "Payin",
                     company: this.merchant.id
@@ -143,8 +206,38 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
                     provider.handlePayin(providerRequest)
                 );
 
+                logger.info(
+                    {
+                        orderId: dto.orderId,
+                        transactionId: this.generatedId,
+                        providerId: channel.providerId,
+                        legalEntityId: channel.legalEntityId,
+                        status: result.status,
+                        success: result.success
+                    },
+                    "[PayinWorkflow] Provider response"
+                );
+
                 if (!result.success && result.status !== "PENDING") {
-                    throw new Error(result.message || "Provider rejected request");
+                    logger.error(
+                        {
+                            orderId: dto.orderId,
+                            transactionId: this.generatedId,
+                            providerId: channel.providerId,
+                            legalEntityId: channel.legalEntityId,
+                            providerStatus: result.status,
+                            providerMessage: result.message,
+                            providerResponse: result
+                        },
+                        "[PayinWorkflow] Provider rejected request"
+                    );
+                    throw new PaymentError(PaymentErrorCode.PROVIDER_REJECTED, {
+                        providerId: channel.providerId,
+                        legalEntityId: channel.legalEntityId,
+                        providerStatus: result.status,
+                        providerMessage: result.message,
+                        providerResponse: result,
+                    });
                 }
 
                 return result;
@@ -153,21 +246,36 @@ export class PayinWorkflow extends BasePaymentWorkflow<InitiatePayinDto> {
                 if (!ProviderClient.isRetryableError(error)) {
                     throw mapToPaymentError(error);
                 }
-                logger.warn(`[PayinWorkflow] Provider ${channel.id} failed, trying fallback...`);
+                logger.warn(
+                    {
+                        orderId: dto.orderId,
+                        transactionId: this.generatedId,
+                        pleId: channel.id,
+                        error: error.message
+                    },
+                    "[PayinWorkflow] Provider failed, trying fallback"
+                );
             }
         }
 
         throw mapToPaymentError(lastError || new Error("Provider unavailable"));
     }
 
-    protected async postExecute(result: any): Promise<void> {
+    protected async postExecute(result: ProviderPayinResult): Promise<void> {
         if (result.success && result.status === 'SUCCESS') {
             const entryId = await PaymentLedgerService.processPayinCredit(this.transaction);
-            logger.info(`[PayinWorkflow] Ledger Credited: ${entryId}`);
+            logger.info(
+                {
+                    orderId: this.transaction.orderId,
+                    transactionId: this.transaction.id,
+                    ledgerEntryId: entryId
+                },
+                "[PayinWorkflow] Ledger credited"
+            );
         }
     }
 
-    protected formatResponse(result: any): any {
+    protected formatResponse(result: ProviderPayinResult): PayinInitiateResponse {
         return {
             orderId: this.transaction.orderId,
             transactionId: this.generatedId,

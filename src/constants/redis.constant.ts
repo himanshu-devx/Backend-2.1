@@ -28,6 +28,9 @@ export const RedisKeys = {
     PROFILE: (id: string) => `admin:profile:${id}`,
     API_KEYS: (id: string) => `admin:api-keys:${id}`,
   },
+  PROVIDER: {
+    TYPE: (id: string) => `provider:type:${id}`,
+  },
   CHANNEL: (providerId: string, legalEntityId: string) =>
     `channel:${providerId}:${legalEntityId}`,
 } as const;

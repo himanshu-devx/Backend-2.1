@@ -29,6 +29,9 @@ import { LoginStatus, ActorType } from "@/models/login-history.model";
 import { validateAdminIp } from "@/utils/ip-validation.util";
 import argon2 from "argon2";
 import { randomBytes } from "crypto";
+import { encryptSecret } from "@/utils/secret.util";
+import crypto from "crypto"
+import { getISTDate } from "@/utils/date.util";
 
 export class AdminService {
   // --- 1. ACCOUNT CREATION ---
@@ -885,12 +888,17 @@ export class AdminService {
       updates.payout = payout;
       updates.isOnboard = true;
 
+      const newSecret = "sk_" + crypto.randomBytes(24).toString("hex");
+      updates.apiSecretEncrypted = encryptSecret(newSecret)
+      updates.apiSecretUpdatedAt = getISTDate()
+      updates.apiSecretEnabled = true
+
       // Store ledger account IDs in merchant model
       updates.accounts = {
-        payinAccountId: createdAccounts.payin.id,
-        payoutAccountId: createdAccounts.payout.id,
-        holdAccountId: createdAccounts.hold.id,
-      };
+          payinAccountId: createdAccounts.payin.id,
+          payoutAccountId: createdAccounts.payout.id,
+          holdAccountId: createdAccounts.hold.id,
+        };
 
       await merchantRepository.update(
         merchant.id,

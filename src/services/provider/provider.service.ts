@@ -4,6 +4,7 @@ import { ok, err, Result } from "@/utils/result";
 import { HttpError, NotFound, BadRequest } from "@/utils/error";
 import { AuditContext } from "@/utils/audit.util";
 import { AuditService } from "@/services/common/audit.service";
+import { CacheService } from "@/services/common/cache.service";
 
 class ProviderRepository extends BaseRepository<ProviderDocument> {
   constructor() {
@@ -18,16 +19,26 @@ export class ProviderService {
     data: Partial<ProviderDocument>,
     auditContext?: AuditContext
   ): Promise<Result<ProviderDocument, HttpError>> {
-    const existing = await providerRepository.findOne({ name: data.name });
+
+    if (!data.id && data.name) {
+      data.id = data.name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]/g, "");
+    }
+
+    if (!data.id) {
+      return err(BadRequest("Provider with this name have issue"));
+    }
+
+
+    const existing = await providerRepository.findOne({ id: data.id });
     if (existing) {
       return err(BadRequest("Provider with this name already exists"));
     }
 
     // Generate ID explicitly
-    if (!data.id && data.name) {
-      const { generateSlug } = await import("@/utils/id.util");
-      data.id = generateSlug(data.name);
-    }
+
 
     const created = await providerRepository.create(data);
 
@@ -118,6 +129,10 @@ export class ProviderService {
         userAgent: auditContext.userAgent,
         requestId: auditContext.requestId,
       });
+    }
+
+    if (updates.type) {
+      await CacheService.invalidateProviderType(id);
     }
 
     return ok(updated);

@@ -10,6 +10,8 @@ services:
       NODE_ENV: production
     env_file:
       - ./.env.prod
+    volumes:
+      - reports_data:/data/reports
     ports:
       - "4000:4000"
     init: true
@@ -34,6 +36,8 @@ services:
       NODE_ENV: production
     env_file:
       - ./.env.prod
+    volumes:
+      - reports_data:/data/reports
     ports:
       - "4001:4001"
     init: true
@@ -56,6 +60,8 @@ services:
       NODE_ENV: production
     env_file:
       - ./.env.prod
+    volumes:
+      - reports_data:/data/reports
     init: true
     restart: unless-stopped
     depends_on:
@@ -170,6 +176,7 @@ volumes:
   grafana_data:
   tempo_data:
   loki_data:
+  reports_data:
   caddy_data:
   caddy_config:
 

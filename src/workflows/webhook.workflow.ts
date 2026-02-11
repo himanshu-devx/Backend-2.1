@@ -1,5 +1,5 @@
 import { TransactionModel, TransactionStatus, TransactionDocument } from "@/models/transaction.model";
-import { ProviderFactory } from "@/providers/provider-factory";
+import { ProviderClient } from "@/services/provider-config/provider-client.service";
 import { CacheService } from "@/services/common/cache.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
@@ -10,24 +10,63 @@ import { decryptSecret } from "@/utils/secret.util";
 import { toDisplayAmount } from "@/utils/money.util";
 
 export class WebhookWorkflow {
-    async execute(type: "PAYIN" | "PAYOUT", providerId: string, legalEntityId: string, payload: any) {
-        logger.info(`[WebhookWorkflow] Processing ${type} for ${providerId}/${legalEntityId}`);
+    async execute(
+        type: "PAYIN" | "PAYOUT" | "COMMON",
+        providerId: string,
+        legalEntityId: string,
+        rawBody: string
+    ) {
+        logger.info(
+            { type, providerId, legalEntityId, rawBodyLength: rawBody.length },
+            "[WebhookWorkflow] Processing webhook"
+        );
 
-        // 1. Resolve Channel
-        const ple = await CacheService.getChannel(providerId, legalEntityId);
-        if (!ple) throw new Error("Channel not found");
+        const providerType = await CacheService.getProviderType(providerId);
+        if (providerType === "GATEWAY" && !legalEntityId) {
+            throw new Error("legalEntityId is required for gateway webhook");
+        }
+
+        if (providerType === "GATEWAY") {
+            const ple = await CacheService.getChannel(providerId, legalEntityId);
+            if (!ple) throw new Error("Channel not found");
+        }
 
         // 2. Parse & Verify (State Transition Check)
-        const provider = ProviderFactory.getProvider(ple.id);
-        const result = await provider.handleWebhook(payload, type);
+        const provider = await ProviderClient.getProviderForRouting(
+            providerId,
+            legalEntityId
+        );
+        const result = await provider.handleWebhook({ rawBody }, type);
+
+        logger.info(
+            {
+                type,
+                providerId,
+                legalEntityId,
+                transactionId: result.transactionId,
+                providerTransactionId: result.providerTransactionId,
+                status: result.status
+            },
+            "[WebhookWorkflow] Parsed webhook"
+        );
 
         if (!result.transactionId) throw new Error("No transactionId in webhook");
 
         // 3. Persistent Record & Lock
         const transaction = await TransactionModel.findOne({ id: result.transactionId });
-        if (!transaction) throw new Error(`Txn ${result.transactionId} not found`);
+        if (!transaction) {
+            logger.error(
+                { transactionId: result.transactionId, providerId, legalEntityId },
+                "[WebhookWorkflow] Transaction not found"
+            );
+            throw new Error(`Txn ${result.transactionId} not found`);
+        }
 
         if (transaction.status !== TransactionStatus.PENDING) {
+            logger.info(
+                { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
+                "[WebhookWorkflow] Transaction already processed"
+            );
             return { transaction, alreadyProcessed: true };
         }
 
@@ -61,10 +100,22 @@ export class WebhookWorkflow {
             // 5. Outbound Notification
             this.notifyMerchant(transaction);
 
+            logger.info(
+                { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
+                "[WebhookWorkflow] Transaction updated from webhook"
+            );
+
             return { transaction, alreadyProcessed: false };
 
         } catch (error: any) {
-            logger.error(`[WebhookWorkflow] Critical Error for ${transaction.id}: ${error.message}`);
+            logger.error(
+                {
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    error: error.message
+                },
+                "[WebhookWorkflow] Critical error"
+            );
             // We don't mark as FAILED here if it's a code error (e.g. ledger down), 
             // so we can retry the webhook.
             throw error;

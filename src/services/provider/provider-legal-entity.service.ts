@@ -8,6 +8,26 @@ import { ok, err, Result } from "@/utils/result";
 import { HttpError, NotFound, BadRequest } from "@/utils/error";
 import { AuditContext } from "@/utils/audit.util";
 import { AuditService } from "@/services/common/audit.service";
+import { z } from "zod";
+import { ProviderClient } from "@/services/provider-config/provider-client.service";
+import { getProviderRegistration } from "@/provider-config/provider-registry";
+import { CacheService } from "@/services/common/cache.service";
+
+const isOptionalSchema = (schema: z.ZodTypeAny): boolean => {
+  if (schema instanceof z.ZodOptional) return true;
+  if (schema instanceof z.ZodDefault) return true;
+  if (schema instanceof z.ZodNullable) return true;
+  return false;
+};
+
+const toEnvKey = (value: string): string =>
+  value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .toUpperCase();
+
+const toEnvPrefix = (value: string): string =>
+  value.replace(/[^a-zA-Z0-9]/g, "_").toUpperCase();
 
 class ProviderLegalEntityRepository extends BaseRepository<ProviderLegalEntityDocument> {
   constructor() {
@@ -134,7 +154,7 @@ export class ProviderLegalEntityService {
 
         const pName = ple.provider?.name || ple.provider?.displayName || ple.providerId;
         const lName = ple.legalEntity?.name || ple.legalEntity?.displayName || ple.legalEntityId;
-        const formattedName = `ple- (${pName} - ${lName})`;
+        const formattedName = `${pName} x ${lName}`;
 
         return {
           id: ple.id,
@@ -146,6 +166,7 @@ export class ProviderLegalEntityService {
           provider: ple.provider,
           legalEntity: ple.legalEntity,
           isOnboard: ple.isOnboard,
+          isActive:ple.isActive,
           payinAccount: ple.accounts?.payinAccountId ? {
             accountId: ple.accounts.payinAccountId,
             ledgerBalance: balances[ple.accounts.payinAccountId] || '0',
@@ -179,16 +200,73 @@ export class ProviderLegalEntityService {
     pleObj.payoutAccount = null;
     pleObj.expenseAccount = null;
 
-    if (!pleObj.name) {
+    {
       const { ProviderModel } = await import("@/models/provider.model");
       const { LegalEntityModel } = await import("@/models/legal-entity.model");
       const [provider, le] = await Promise.all([
-        ProviderModel.findOne({ id: pleObj.providerId }).select("name displayName"),
-        LegalEntityModel.findOne({ id: pleObj.legalEntityId }).select("name displayName"),
+        ProviderModel.findOne({ id: pleObj.providerId }).select("id name displayName"),
+        LegalEntityModel.findOne({ id: pleObj.legalEntityId }).select("id name displayName"),
       ]);
-      const pName = provider?.name || provider?.displayName || pleObj.providerId;
-      const lName = le?.name || le?.displayName || pleObj.legalEntityId;
-      pleObj.name = `ple- (${pName} - ${lName})`;
+
+      if (provider) {
+        pleObj.provider = provider.toObject ? provider.toObject() : provider;
+      }
+      if (le) {
+        pleObj.legalEntity = le.toObject ? le.toObject() : le;
+      }
+
+      if (!pleObj.name) {
+        const pName = provider?.name || provider?.displayName || pleObj.providerId;
+        const lName = le?.name || le?.displayName || pleObj.legalEntityId;
+        pleObj.name = `${pName} x ${lName}`;
+      }
+    }
+
+    try {
+      const providerType = await CacheService.getProviderType(pleObj.providerId);
+      const envPrefix =
+        providerType === "BANK"
+          ? toEnvPrefix(pleObj.providerId)
+          : toEnvPrefix(`${pleObj.providerId}_${pleObj.legalEntityId}`);
+
+      const registration = getProviderRegistration(pleObj.providerId);
+      const schema = registration?.credentialsSchema;
+      const allKeys = schema ? Object.keys(schema.shape) : [];
+      const requiredKeys = schema
+        ? allKeys.filter((key) => !isOptionalSchema(schema.shape[key]))
+        : [];
+      const optionalKeys = schema
+        ? allKeys.filter((key) => isOptionalSchema(schema.shape[key]))
+        : [];
+      const allCredentials = [...requiredKeys, ...optionalKeys];
+
+      pleObj.integration = pleObj.integration || {
+        providerType,
+        requiredEnvKeys: allCredentials.map((key) => `${envPrefix}_${toEnvKey(key)}`),
+      };
+
+      pleObj.webhooks = pleObj.webhooks || {
+        payin: await ProviderClient.buildWebhookUrl(
+          "PAYIN",
+          pleObj.providerId,
+          pleObj.legalEntityId
+        ),
+        payout: await ProviderClient.buildWebhookUrl(
+          "PAYOUT",
+          pleObj.providerId,
+          pleObj.legalEntityId
+        ),
+        common: await ProviderClient.buildWebhookUrl(
+          "COMMON",
+          pleObj.providerId,
+          pleObj.legalEntityId
+        ),
+      };
+    } catch (error) {
+      pleObj.integration = pleObj.integration || {
+        requiredEnvKeys: [],
+      };
+      pleObj.webhooks = pleObj.webhooks || { payin: null, payout: null, common: null };
     }
 
     return ok(pleObj);
@@ -281,25 +359,80 @@ export class ProviderLegalEntityService {
     data: Partial<ProviderLegalEntityDocument>,
     auditContext?: AuditContext
   ): Promise<Result<ProviderLegalEntityDocument, HttpError>> {
-    // Generate ID explicitly
-    if (!data.id) {
-      const { generateCustomId } = await import("@/utils/id.util");
-      data.id = await generateCustomId("PLE", "provider_legal_entity");
+    if (!data.providerId) {
+      return err(BadRequest("Provider ID is required"));
+    }
+    if (!data.legalEntityId) {
+      return err(BadRequest("Legal Entity ID is required"));
     }
 
+    // Generate ID explicitly
     data.isOnboard = true;
 
     // Populate name during creation
-    if (!data.name) {
+    if (!data.name || !data.id) {
       const { ProviderModel } = await import("@/models/provider.model");
       const { LegalEntityModel } = await import("@/models/legal-entity.model");
       const [provider, le] = await Promise.all([
-        ProviderModel.findOne({ id: data.providerId }).select("name displayName"),
-        LegalEntityModel.findOne({ id: data.legalEntityId }).select("name displayName"),
+        ProviderModel.findOne({ id: data.providerId }).select("id name displayName type"),
+        LegalEntityModel.findOne({ id: data.legalEntityId }).select("id name displayName"),
       ]);
+      if (!provider) {
+        return err(NotFound(`Provider not found: ${data.providerId}`));
+      }
+      if (!le) {
+        return err(NotFound(`Legal Entity not found: ${data.legalEntityId}`));
+      }
       const pName = provider?.name || provider?.displayName || data.providerId;
       const lName = le?.name || le?.displayName || data.legalEntityId;
-      data.name = `ple- (${pName} - ${lName})`;
+      data.name = `${pName} × ${lName}`;
+      // Machine ID
+      data.id = `${provider?.id}_${le?.id}`
+
+      // Populate integration & webhooks for persistence
+      try {
+        const providerType = provider?.type || "GATEWAY";
+        const envPrefix =
+          providerType === "BANK"
+            ? toEnvPrefix(data.providerId!)
+            : toEnvPrefix(`${data.providerId}_${data.legalEntityId}`);
+
+        const registration = getProviderRegistration(data.providerId!);
+        const schema = registration?.credentialsSchema;
+        const allKeys = schema ? Object.keys(schema.shape) : [];
+        const requiredKeys = schema
+          ? allKeys.filter((key) => !isOptionalSchema(schema.shape[key]))
+          : [];
+        const optionalKeys = schema
+          ? allKeys.filter((key) => isOptionalSchema(schema.shape[key]))
+          : [];
+        const allCredentials = [...requiredKeys, ...optionalKeys];
+
+        data.integration = {
+          providerType,
+          requiredEnvKeys: allCredentials.map((key) => `${envPrefix}_${toEnvKey(key)}`),
+        };
+
+        data.webhooks = {
+          payin: await ProviderClient.buildWebhookUrl(
+            "PAYIN",
+            data.providerId!,
+            data.legalEntityId!
+          ),
+          payout: await ProviderClient.buildWebhookUrl(
+            "PAYOUT",
+            data.providerId!,
+            data.legalEntityId!
+          ),
+          common: await ProviderClient.buildWebhookUrl(
+            "COMMON",
+            data.providerId!,
+            data.legalEntityId!
+          ),
+        };
+      } catch (err) {
+        console.error("Failed to populate defaults for creation:", err);
+      }
     }
 
     // Create Provider Ledger Accounts FIRST - if this fails, don't create the link

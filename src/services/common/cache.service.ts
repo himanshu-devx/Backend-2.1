@@ -2,6 +2,7 @@ import { redis } from "@/infra/redis-instance";
 import { RedisKeys } from "@/constants/redis.constant";
 import { MerchantModel } from "@/models/merchant.model";
 import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
+import { ProviderModel } from "@/models/provider.model";
 
 export class CacheService {
   private static TTL = 3600; // 1 hour
@@ -209,6 +210,26 @@ export class CacheService {
    */
   static async invalidateChannel(providerId: string, legalEntityId: string) {
     await redis.del(RedisKeys.CHANNEL(providerId, legalEntityId));
+  }
+
+  /**
+   * Get Provider Type from cache or DB
+   */
+  static async getProviderType(id: string): Promise<"BANK" | "GATEWAY"> {
+    const key = RedisKeys.PROVIDER.TYPE(id);
+    const cached = await redis.get(key);
+    if (cached === "BANK" || cached === "GATEWAY") return cached;
+
+    const provider = await ProviderModel.findOne({ id }).select("type");
+    if (!provider) throw new Error(`Provider not found: ${id}`);
+
+    const type = provider.type as "BANK" | "GATEWAY";
+    await redis.setex(key, this.TTL, type);
+    return type;
+  }
+
+  static async invalidateProviderType(id: string) {
+    await redis.del(RedisKeys.PROVIDER.TYPE(id));
   }
 
   // Ledger account cache removed (ledger-only mode)

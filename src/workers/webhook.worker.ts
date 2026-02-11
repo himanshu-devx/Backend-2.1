@@ -24,7 +24,14 @@ async function startWorker() {
 
             if (!task) continue;
 
-            logger.info(`[WebhookWorker] Processing ${task.type} for ${task.providerId}...`);
+            logger.info(
+                {
+                    type: task.type,
+                    providerId: task.providerId,
+                    legalEntityId: task.legalEntityId
+                },
+                "[WebhookWorker] Processing webhook"
+            );
 
             try {
                 // Execute Workflow with data directly from Queue
@@ -32,13 +39,30 @@ async function startWorker() {
                     task.type,
                     task.providerId,
                     task.legalEntityId,
-                    task.payload
+                    task.rawBody
                 );
 
-                logger.info(`[WebhookWorker] Successfully processed ${task.type} (Txn: ${result.transaction.id})`);
+                logger.info(
+                    {
+                        type: task.type,
+                        providerId: task.providerId,
+                        legalEntityId: task.legalEntityId,
+                        transactionId: result.transaction.id,
+                        orderId: result.transaction.orderId
+                    },
+                    "[WebhookWorker] Webhook processed"
+                );
 
             } catch (workflowError: any) {
-                logger.error(`[WebhookWorker] Workflow Error: ${workflowError.message}`);
+                logger.error(
+                    {
+                        type: task.type,
+                        providerId: task.providerId,
+                        legalEntityId: task.legalEntityId,
+                        error: workflowError.message
+                    },
+                    "[WebhookWorker] Workflow error"
+                );
                 await WebhookQueue.retry(task, workflowError.message || "Workflow error");
             }
 

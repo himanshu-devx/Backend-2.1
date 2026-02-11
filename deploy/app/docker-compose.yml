@@ -6,6 +6,8 @@ services:
     environment:
       SERVICE: instances/api
     env_file: ./.env
+    volumes:
+      - reports_data:/data/reports
     ports:
       - "${API_PORT:-4000}:4000"
     init: true
@@ -19,6 +21,8 @@ services:
     environment:
       SERVICE: instances/payment
     env_file: ./.env
+    volumes:
+      - reports_data:/data/reports
     ports:
       - "${PAYMENT_PORT:-4001}:4001"
     init: true
@@ -32,8 +36,22 @@ services:
     environment:
       SERVICE: workers/webhook.worker
     env_file: ./.env
+    volumes:
+      - reports_data:/data/reports
     init: true
     stop_grace_period: 30s
+    restart: unless-stopped
+    networks:
+      - app_net
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    env_file: ./.env
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
     restart: unless-stopped
     networks:
       - app_net
@@ -59,3 +77,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  reports_data:

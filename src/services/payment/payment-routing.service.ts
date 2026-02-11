@@ -1,4 +1,5 @@
 import { CacheService } from '@/services/common/cache.service';
+import { ProviderClient } from '@/services/provider-config/provider-client.service';
 import { ProviderLegalEntityDocument } from '@/models/provider-legal-entity.model';
 
 /**
@@ -146,16 +147,24 @@ export class PaymentRoutingService {
         serviceType: 'PAYIN' | 'PAYOUT'
     ): Promise<ProviderLegalEntityDocument | null> {
         try {
-            const pleId = await this.selectProvider(merchantId, serviceType);
             const merchant = await CacheService.getMerchant(merchantId);
             if (!merchant) return null;
 
             const config = serviceType === 'PAYIN' ? merchant.payin : merchant.payout;
 
-            return await CacheService.getChannel(
+            const details = await CacheService.getChannel(
                 config.routing!.providerId,
                 config.routing!.legalEntityId
             );
+            if (!details) return null;
+
+            const webhookUrl = await ProviderClient.buildWebhookUrl(
+                serviceType,
+                config.routing!.providerId,
+                config.routing!.legalEntityId
+            );
+
+            return { ...(details as any), webhookUrl } as ProviderLegalEntityDocument;
         } catch (error) {
             return null;
         }

@@ -10,6 +10,6 @@ Files:
 - `data/docker-compose.yml` – data stack (Postgres, MongoDB, Redis)
 - `monitoring/docker-compose.yml` – metrics/logs/tracing stack
 - `app/Caddyfile` – TLS reverse proxy for API + Payment (App Server)
-- `monitoring/Caddyfile` – TLS reverse proxy for Grafana/Prometheus/Loki/Tempo
+- `monitoring/Caddyfile` – TLS reverse proxy for Grafana (only)
 - `all/docker-compose.yml` – single‑server stack (app + data + monitoring + caddy)
 - `*/.env.example` – env templates per stack

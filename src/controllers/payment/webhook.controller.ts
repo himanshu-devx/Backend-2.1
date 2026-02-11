@@ -8,12 +8,20 @@ export class WebhookController {
      * Route: POST /webhook/:type/:provider/:legalentity
      */
     async handleProviderWebhook(c: Context) {
-        const type = c.req.param("type").toUpperCase() as "PAYIN" | "PAYOUT";
+        const type = c.req.param("type").toUpperCase() as "PAYIN" | "PAYOUT" | "COMMON";
         const providerId = c.req.param("provider");
-        const legalEntityId = c.req.param("legalentity");
-        const payload = await c.req.json();
+        const legalEntityId = c.req.param("legalentity") || "";
+        const rawBody = await c.req.text();
 
-        logger.info(`[Webhook Producer] Received ${type} from ${providerId}/${legalEntityId}`);
+        logger.info(
+            {
+                type,
+                providerId,
+                legalEntityId,
+                rawBodyLength: rawBody.length
+            },
+            "[Webhook Producer] Received webhook"
+        );
 
         try {
             // Queue for Async Processing directly with payload (JSON)
@@ -21,7 +29,7 @@ export class WebhookController {
                 type,
                 providerId,
                 legalEntityId,
-                payload
+                rawBody
             });
 
             return c.json({
@@ -37,4 +45,3 @@ export class WebhookController {
 }
 
 export const webhookController = new WebhookController();
-

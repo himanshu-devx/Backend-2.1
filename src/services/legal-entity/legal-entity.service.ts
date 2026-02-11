@@ -36,18 +36,22 @@ export class LegalEntityService {
           Conflict("Legal Entity with this identifier already exists")
         );
       }
-      // Check for unique name as well
-      const existingName = await legalEntityRepository.findOne({
-        name: data.name,
-      });
-      if (existingName) {
-        return err(BadRequest("Legal Entity with this name already exists"));
+
+      if (!data.id && data.name) {
+        data.id = data.name
+          .toLowerCase()
+          .trim()
+          .replace(/[^a-z0-9]/g, "");
       }
 
-      // Generate ID for Legal Entity explicitly to avoid Mongoose validation race conditions
-      if (!data.id && data.name) {
-        const { generateSlug } = await import("@/utils/id.util");
-        data.id = generateSlug(data.name);
+      if (!data.id) {
+        return err(BadRequest("Leagl Entity with this name have issue"));
+      }
+
+      // Check for unique name as well
+      const existingName = await legalEntityRepository.findOne({ id: data.id });
+      if (existingName) {
+        return err(BadRequest("Legal Entity with this name already exists"));
       }
 
       // --- AUTOMATED PROVISIONING ---

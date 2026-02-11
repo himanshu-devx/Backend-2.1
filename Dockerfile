@@ -23,6 +23,7 @@ RUN npm prune --omit=dev
 FROM base AS runner
 
 RUN useradd --create-home --uid 10001 appuser
+RUN mkdir -p /data/reports && chown -R appuser:appuser /data
 
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules

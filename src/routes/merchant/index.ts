@@ -50,11 +50,6 @@ merchantRoutes.get(
 );
 
 
-merchantRoutes.get(
-  "/api-keys/secret",
-  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
-  handler(MerchantSelfController.getOwnApiSecret)
-);
 
 merchantRoutes.get(
   "/dashboard/stats",
@@ -69,8 +64,14 @@ merchantRoutes.put(
   handler(MerchantSelfController.updateCallbackUrl)
 );
 
+merchantRoutes.get(
+  "/api-keys",
+  authorizeRoles([MERCHANT_ROLES.MERCHANT]),
+  handler(MerchantSelfController.getOwnApiSecret)
+);
+
 merchantRoutes.post(
-  "/api-keys/rotate",
+  "/api-keys",
   authorizeRoles([MERCHANT_ROLES.MERCHANT]),
   handler(MerchantSelfController.rotateApiSecret)
 );
