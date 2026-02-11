@@ -1,6 +1,9 @@
 version: "3.9"
 
 services:
+  # =====================================================
+  # API
+  # =====================================================
   api:
     image: buddydevx/fintech-backend:latest
     environment:
@@ -10,10 +13,11 @@ services:
       - ./.env.backend
     volumes:
       - reports_data:/data/reports
-    ports:
-      - "4000:4000"
-    init: true
     restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.api.rule=Host(`${API_DOMAIN}`)"
@@ -27,10 +31,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
     networks: [ app_net ]
 
+  # =====================================================
+  # PAYMENT SERVICE
+  # =====================================================
   payment:
     image: buddydevx/fintech-backend:latest
     environment:
@@ -40,10 +45,11 @@ services:
       - ./.env.backend
     volumes:
       - reports_data:/data/reports
-    ports:
-      - "4001:4001"
-    init: true
     restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.payment.rule=Host(`${PAYMENT_DOMAIN}`)"
@@ -59,18 +65,27 @@ services:
         condition: service_healthy
     networks: [ app_net ]
 
+  # =====================================================
+  # FRONTEND (Behind Traefik)
+  # =====================================================
   frontend:
     image: buddydevx/fintech-dashboard:latest
     env_file:
       - ./.env.dashboard
-    ports:
-      - "3000:3000"
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${FRONTEND_DOMAIN}`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=le"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     depends_on:
       - api
-      - payment
     networks: [ app_net ]
 
+  # =====================================================
+  # WORKER
+  # =====================================================
   worker:
     image: buddydevx/fintech-backend:latest
     environment:
@@ -80,99 +95,72 @@ services:
       - ./.env.backend
     volumes:
       - reports_data:/data/reports
-    init: true
     restart: unless-stopped
+    init: true
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
     depends_on:
-      postgres:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks: [ app_net ]
 
+  # =====================================================
+  # POSTGRES
+  # =====================================================
   postgres:
     image: postgres:15
     env_file:
       - ./.env.backend
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h localhost -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
     networks: [ app_net ]
 
+  # =====================================================
+  # MONGODB
+  # =====================================================
   mongodb:
     image: mongo:6
     env_file:
       - ./.env.backend
     volumes:
       - mongo_data:/data/db
+    restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping').ok\" | grep 1"]
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
     networks: [ app_net ]
 
+  # =====================================================
+  # REDIS (Secured)
+  # =====================================================
   redis:
     image: redis:7
-    command:
-      - redis-server
-      - --appendonly
-      - "yes"
-      - --requirepass
-      - ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: >
+      sh -c "redis-server --appendonly yes --requirepass \"$REDIS_PASSWORD\""
     volumes:
       - redis_data:/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
     networks: [ app_net ]
 
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.106.0
-    command: ["--config=/etc/otel/otel-collector.yml"]
-    volumes:
-      - ../monitoring/otel-collector.yml:/etc/otel/otel-collector.yml:ro
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  tempo:
-    image: grafana/tempo:2.5.0
-    volumes:
-      - ../monitoring/tempo.yml:/etc/tempo/tempo.yml:ro
-      - tempo_data:/var/tempo
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  loki:
-    image: grafana/loki:2.9.8
-    volumes:
-      - ../monitoring/loki-config.yml:/etc/loki/loki-config.yml:ro
-      - loki_data:/loki
-    restart: unless-stopped
-    networks: [ app_net ]
-
-  grafana:
-    image: grafana/grafana:10.4.3
-    env_file:
-      - ./.env.backend
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ../monitoring/grafana:/etc/grafana/provisioning
-    ports:
-      - "3001:3000"
-    restart: unless-stopped
-    networks: [ app_net ]
-
+  # =====================================================
+  # TRAEFIK
+  # =====================================================
   traefik:
     image: traefik:v3.2
     command:
@@ -198,9 +186,6 @@ volumes:
   postgres_data:
   mongo_data:
   redis_data:
-  grafana_data:
-  tempo_data:
-  loki_data:
   reports_data:
   traefik_letsencrypt:
 
