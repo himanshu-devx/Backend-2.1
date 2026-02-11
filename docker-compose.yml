@@ -1,0 +1,49 @@
+services:
+  api:
+    build: .
+    container_name: fintech-api
+    env_file: .env
+    environment:
+      - SERVICE=instances/api
+    ports:
+      - "4000:4000"
+    restart: always
+
+  payment:
+    build: .
+    container_name: fintech-payment
+    env_file: .env
+    environment:
+      - SERVICE=instances/payment
+    ports:
+      - "4001:4001"
+    restart: always
+
+  worker:
+    build: .
+    container_name: fintech-worker
+    env_file: .env
+    environment:
+      - SERVICE=workers/webhook.worker
+    restart: always
+
+  dashboard:
+    image: buddydevx/fintech-dashboard:latest
+    container_name: fintech-dashboard
+    environment:
+      - NEXT_PUBLIC_COMPANY_NAME=fintech Fintech
+      - NEXT_PUBLIC_LOGO_PATH=/fintech.png
+      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
+      - NEXT_PUBLIC_PAYMENT_URL=http://localhost:4001/api
+      - NODE_ENV=development
+    ports:
+      - "3000:3000"
+    restart: always
+
+  backend-image:
+    image: buddydevx/fintech-backend:latest
+    container_name: fintech-backend-image
+    env_file: .env
+    environment:
+      - PGSSLMODE=require
+    restart: always

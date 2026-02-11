@@ -57,6 +57,9 @@ export function initConnection(config: LedgerPoolConfig): Pool {
   pool = new Pool({
     ...getDefaultPoolConfig(),
     ...pgConfig,
+    ssl: pgConfig.ssl || {
+      rejectUnauthorized: false
+    }
   });
 
   // STRICT: Force IST Timezone for all sessions
@@ -76,11 +79,14 @@ function getPool(): Pool {
     // Auto-init from ENV if not explicitly initialized
     pool = new Pool({
       ...getDefaultPoolConfig(),
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DB_NAME || 'ledger',
+      host: process.env.POSTGRES_HOST,
+      port: Number(process.env.POSTGRES_PORT),
+      user: process.env.POSTGRES_USER,
+      password: process.env.POSTGRES_PASSWORD,
+      database: process.env.POSTGRES_DB,
+      ssl: {
+        rejectUnauthorized: false
+      }
     });
 
     // STRICT: Force IST Timezone for all sessions

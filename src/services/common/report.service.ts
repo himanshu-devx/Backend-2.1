@@ -137,7 +137,7 @@ export class ReportService {
             if (err?.code !== "EACCES" && err?.code !== "EROFS") {
                 throw err;
             }
-            const fallback = path.join(os.tmpdir(), "wisipay", "reports");
+            const fallback = path.join(os.tmpdir(), "fintech", "reports");
             if (!fs.existsSync(fallback)) {
                 fs.mkdirSync(fallback, { recursive: true });
             }
