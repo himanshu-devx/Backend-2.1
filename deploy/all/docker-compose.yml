@@ -2,9 +2,7 @@ version: "3.9"
 
 services:
   api:
-    build:
-      context: ../../
-      dockerfile: Dockerfile
+    image: buddydevx-fintech-backend:latest
     environment:
       SERVICE: instances/api
       NODE_ENV: production
@@ -28,9 +26,7 @@ services:
     networks: [ app_net ]
 
   payment:
-    build:
-      context: ../../
-      dockerfile: Dockerfile
+    image: buddydevx-fintech-backend:latest
     environment:
       SERVICE: instances/payment
       NODE_ENV: production
@@ -52,9 +48,7 @@ services:
     networks: [ app_net ]
 
   worker:
-    build:
-      context: ../../
-      dockerfile: Dockerfile
+    image: buddydevx-fintech-backend:latest
     environment:
       SERVICE: workers/webhook.worker
       NODE_ENV: production
