@@ -28,6 +28,11 @@ const schema = z.object({
   SMTP_SECURE: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(false)),
   MAIL_FROM_EMAIL: z.string().email().optional(),
   MAIL_FROM_NAME: z.string().optional(),
+  ZEPTOMAIL_API_KEY: z.string().optional(),
+  ZEPTOMAIL_FROM_EMAIL: z.string().email().optional(),
+  ZEPTOMAIL_FROM_NAME: z.string().optional(),
+  ZEPTOMAIL_BOUNCE_ADDRESS: z.string().optional(),
+  ZEPTOMAIL_URL: z.string().url().optional(),
 
   APP_BRAND_NAME: z.string().default("Your App"),
   APP_BRAND_PREFIX: z.string().optional(),
@@ -89,6 +94,11 @@ export const ENV: Env = schema.parse({
   SMTP_SECURE: process.env.SMTP_SECURE,
   MAIL_FROM_EMAIL: process.env.MAIL_FROM_EMAIL,
   MAIL_FROM_NAME: process.env.MAIL_FROM_NAME,
+  ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
+  ZEPTOMAIL_FROM_EMAIL: process.env.ZEPTOMAIL_FROM_EMAIL,
+  ZEPTOMAIL_FROM_NAME: process.env.ZEPTOMAIL_FROM_NAME,
+  ZEPTOMAIL_BOUNCE_ADDRESS: process.env.ZEPTOMAIL_BOUNCE_ADDRESS,
+  ZEPTOMAIL_URL: process.env.ZEPTOMAIL_URL,
 
   APP_BRAND_NAME: process.env.APP_BRAND_NAME,
   APP_BASE_URL: process.env.APP_BASE_URL,

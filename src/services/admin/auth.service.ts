@@ -91,7 +91,7 @@ export class AdminService {
         admin.email,
         {
           name: admin.name,
-          loginUrl: `${ENV.APP_BASE_URL}/admin/login`,
+          loginUrl: `${ENV.FRONTEND_URL}/admin/login`,
           initialPassword: temporaryPassword,
           loginId: admin.email,
           role: admin.role,
@@ -895,10 +895,10 @@ export class AdminService {
 
       // Store ledger account IDs in merchant model
       updates.accounts = {
-          payinAccountId: createdAccounts.payin.id,
-          payoutAccountId: createdAccounts.payout.id,
-          holdAccountId: createdAccounts.hold.id,
-        };
+        payinAccountId: createdAccounts.payin.id,
+        payoutAccountId: createdAccounts.payout.id,
+        holdAccountId: createdAccounts.hold.id,
+      };
 
       await merchantRepository.update(
         merchant.id,

@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { SendMailClient } from "zeptomail";
 import type { Logger } from "pino";
 import { ENV } from "@/config/env";
 
@@ -11,6 +12,71 @@ export interface EmailPayload {
 
 export interface EmailProvider {
   sendMail(payload: EmailPayload, logger?: Logger): Promise<void>;
+}
+
+export class ZeptoMailEmailProvider implements EmailProvider {
+  private client: SendMailClient;
+
+  constructor() {
+    const url = ENV.ZEPTOMAIL_URL || "https://api.zeptomail.com/v1.1/email";
+    const token = ENV.ZEPTOMAIL_API_KEY;
+
+    if (!token) {
+      throw new Error("ZEPTOMAIL_API_KEY is required for ZeptoMailEmailProvider");
+    }
+
+    this.client = new SendMailClient({ url, token });
+  }
+
+  async sendMail(payload: EmailPayload, logger?: Logger): Promise<void> {
+    try {
+      const fromEmail = ENV.ZEPTOMAIL_FROM_EMAIL || ENV.MAIL_FROM_EMAIL;
+      const fromName = ENV.ZEPTOMAIL_FROM_NAME || ENV.MAIL_FROM_NAME || ENV.APP_BRAND_NAME || "App";
+      const bounceAddress = ENV.ZEPTOMAIL_BOUNCE_ADDRESS;
+
+      if (!fromEmail) {
+        throw new Error("Sender email (ZEPTOMAIL_FROM_EMAIL or MAIL_FROM_EMAIL) is required");
+      }
+
+      const toList = Array.isArray(payload.to) ? payload.to : [payload.to];
+
+      const mailConfig: any = {
+        from: {
+          address: fromEmail,
+          name: fromName,
+        },
+        to: toList.map((email) => ({
+          email_address: {
+            address: email,
+            name: email, // ZeptoMail likes names, we'll use email as name
+          },
+        })),
+        subject: payload.subject,
+        htmlbody: payload.html,
+      };
+
+      if (payload.text) {
+        mailConfig.textbody = payload.text;
+      }
+
+      if (bounceAddress) {
+        mailConfig.bounce_address = bounceAddress;
+      }
+
+      await this.client.sendMail(mailConfig);
+
+      logger?.info(
+        {
+          to: payload.to,
+          subject: payload.subject,
+        },
+        "Email sent via ZeptoMail API"
+      );
+    } catch (err) {
+      logger?.error({ err }, "Failed to send email via ZeptoMail API");
+      throw err;
+    }
+  }
 }
 
 export class SmtpEmailProvider implements EmailProvider {

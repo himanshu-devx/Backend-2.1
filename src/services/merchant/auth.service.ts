@@ -53,12 +53,12 @@ export class MerchantService {
     const merchant = await merchantRepository.create(data);
     merchant.password = "-";
 
-    let loginUrl = `${ENV.APP_BASE_URL}/merchant/login`;
+    let loginUrl = `${ENV.FRONTEND_URL}/login`;
 
     // Dynamic URL generation based on request origin
     if (auditContext?.origin) {
       const baseUrl = auditContext.origin.replace(/\/$/, "");
-      loginUrl = `${baseUrl}/merchant/login`;
+      loginUrl = `${baseUrl}/login`;
     }
 
     await emailService.sendTemplate(
@@ -193,10 +193,10 @@ export class MerchantService {
             otp: otpCode,
           }
         );
-        console.log(`[DEBUG] OTP email sent to ${merchant.email}`);
+        console.log(`[DEBUG] OTP email sent to ${merchant.email} `);
       } catch (error) {
         console.error(
-          `[ERROR] Failed to send OTP email to ${merchant.email}:`,
+          `[ERROR] Failed to send OTP email to ${merchant.email}: `,
           error
         );
       }

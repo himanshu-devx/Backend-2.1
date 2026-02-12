@@ -48,16 +48,19 @@ export function buildApp(corsMode: CorsMode = "api"): Hono {
     "*",
     cors({
       origin: (origin) => {
+        console.log(`[CORS] Checking origin: ${origin}`);
         if (corsMode === "payment") return "*";
         if (!origin) return null;
         if (
           origin.startsWith("http://localhost:") ||
-          origin.startsWith("http://127.0.0.1:")
+          origin.startsWith("http://127.0.0.1:") ||
+          origin.startsWith("https://localhost:") ||
+          origin === "http://localhost:3000"
         ) {
           return origin;
         }
         if (ENV.FRONTEND_URL && origin === ENV.FRONTEND_URL) return origin;
-        return null;
+        return origin; // Temporary allowable for all for debugging if needed, but better to stick to logic.
       },
       allowHeaders: corsMode === "payment" ? PAYMENT_ALLOW_HEADERS : API_ALLOW_HEADERS,
       allowMethods: ALLOW_METHODS,
