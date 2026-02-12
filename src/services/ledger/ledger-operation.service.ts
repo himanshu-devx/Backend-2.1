@@ -291,7 +291,13 @@ export class LedgerOperationService {
         purpose: ENTITY_ACCOUNT_TYPE.INCOME,
       };
     } else if (op === LEDGER_OPERATION.PLE_EXPENSE_CHARGE) {
-      from = { world: true };
+      from = { accountId: ple.payinAccountId };
+      to = { accountId: ple.expenseAccountId };
+    } else if (op === LEDGER_OPERATION.PLE_PAYIN_FEE_CHARGE) {
+      from = { accountId: ple.payinAccountId };
+      to = { accountId: ple.expenseAccountId };
+    } else if (op === LEDGER_OPERATION.PLE_PAYOUT_FEE_CHARGE) {
+      from = { accountId: ple.payoutAccountId };
       to = { accountId: ple.expenseAccountId };
     } else if (op === LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT) {
       if (!leid) throw BadRequest("legalEntityId is required");
@@ -422,6 +428,8 @@ export class LedgerOperationService {
       case LEDGER_OPERATION.PLE_DEPOSIT:
       case LEDGER_OPERATION.PLE_EXPENSE_SETTLEMENT:
       case LEDGER_OPERATION.PLE_EXPENSE_CHARGE:
+      case LEDGER_OPERATION.PLE_PAYIN_FEE_CHARGE:
+      case LEDGER_OPERATION.PLE_PAYOUT_FEE_CHARGE:
       case LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT: {
         prepResult = await this.preparePleOperation(op, providerLegalEntityId, providerId, legalEntityId);
         if (prepResult.providerId) providerId = prepResult.providerId;

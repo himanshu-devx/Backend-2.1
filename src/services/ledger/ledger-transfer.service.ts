@@ -220,6 +220,13 @@ export class LedgerTransferService {
 
     await transaction.save();
 
+    if (amountStored === 0) {
+      return {
+        transaction: mapTransactionAmountsToDisplay(transaction.toObject ? transaction.toObject() : transaction),
+        ledgerEntryId: undefined,
+      };
+    }
+
     try {
       const entryId = await LedgerService.transfer({
         narration,

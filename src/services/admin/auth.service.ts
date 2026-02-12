@@ -930,6 +930,21 @@ export class AdminService {
       });
     }
 
+    try {
+      await emailService.sendTemplate(
+        EmailTemplate.MERCHANT_ONBOARDED,
+        merchant.email,
+        {
+          name: merchant.name,
+          loginUrl: `${ENV.FRONTEND_URL}/login`,
+          payinEnabled: true,
+          payoutEnabled: true,
+        }
+      );
+    } catch (error) {
+      console.error("[ERROR] Failed to send onboarding email to merchant:", error);
+    }
+
     return ok({
       message: "Merchant onboarded successfully",
       accounts: createdAccounts,

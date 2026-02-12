@@ -17,6 +17,8 @@ export const LEDGER_OPERATION = {
   PLE_DEPOSIT: "PLE_DEPOSIT",
   PLE_EXPENSE_SETTLEMENT: "PLE_EXPENSE_SETTLEMENT",
   PLE_EXPENSE_CHARGE: "PLE_EXPENSE_CHARGE",
+  PLE_PAYIN_FEE_CHARGE: "PLE_PAYIN_FEE_CHARGE",
+  PLE_PAYOUT_FEE_CHARGE: "PLE_PAYOUT_FEE_CHARGE",
 } as const;
 
 export type LedgerOperationType =
@@ -99,6 +101,16 @@ export const LEDGER_OPERATION_META: Record<
     required: ["providerLegalEntityId"],
     optional: ["valueDate", "metadata", "utr"],
   },
+  PLE_PAYIN_FEE_CHARGE: {
+    description: "Provider PAYIN -> Provider EXPENSE (daily payin fees)",
+    required: ["providerLegalEntityId"],
+    optional: ["valueDate", "metadata", "utr"],
+  },
+  PLE_PAYOUT_FEE_CHARGE: {
+    description: "Provider PAYOUT -> Provider EXPENSE (daily payout fees)",
+    required: ["providerLegalEntityId"],
+    optional: ["valueDate", "metadata", "utr"],
+  },
 };
 
 export const LEDGER_OPERATION_DEFAULT_TXN: Record<
@@ -118,6 +130,8 @@ export const LEDGER_OPERATION_DEFAULT_TXN: Record<
   PLE_DEPOSIT: TransactionType.PLE_DEPOSIT,
   PLE_EXPENSE_SETTLEMENT: TransactionType.PLE_EXPENSE_SETTLEMENT,
   PLE_EXPENSE_CHARGE: TransactionType.PLE_EXPENSE_CHARGE,
+  PLE_PAYIN_FEE_CHARGE: TransactionType.PLE_PAYIN_FEE_CHARGE,
+  PLE_PAYOUT_FEE_CHARGE: TransactionType.PLE_PAYOUT_FEE_CHARGE,
 };
 
 export const OPERATION_ACCOUNT_SCOPES: Record<LedgerOperationType, string[]> = {
@@ -131,6 +145,8 @@ export const OPERATION_ACCOUNT_SCOPES: Record<LedgerOperationType, string[]> = {
   [LEDGER_OPERATION.PLE_DEPOSIT]: ["PAYOUT"],
   [LEDGER_OPERATION.PLE_EXPENSE_SETTLEMENT]: ["EXPENSE"],
   [LEDGER_OPERATION.PLE_EXPENSE_CHARGE]: ["EXPENSE"],
+  [LEDGER_OPERATION.PLE_PAYIN_FEE_CHARGE]: ["PAYIN", "EXPENSE"],
+  [LEDGER_OPERATION.PLE_PAYOUT_FEE_CHARGE]: ["PAYOUT", "EXPENSE"],
   [LEDGER_OPERATION.LEGAL_ENTITY_SETTLEMENT]: ["PAYIN"],
   [LEDGER_OPERATION.LEGAL_ENTITY_DEPOSIT]: ["PAYOUT"],
   [LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT]: ["BANK"],

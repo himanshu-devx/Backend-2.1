@@ -10,15 +10,7 @@ import webhookRoutes from "@/routes/payment/webhook.routes";
 import { rateLimiter } from "@/middlewares/rate-limiter";
 import "@/infra/otel-sdk";
 import { serve } from "@hono/node-server";
-import { startLedgerJobs } from "@/jobs/ledger.jobs";
-
 await bootstrap();
-
-try {
-  startLedgerJobs();
-} catch (error) {
-  console.error("Failed to start ledger cron jobs (continuing application)", error);
-}
 
 const app = buildApp("api");
 

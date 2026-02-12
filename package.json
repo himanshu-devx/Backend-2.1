@@ -6,6 +6,8 @@
   "scripts": {
     "dev:api": "tsx watch -r dotenv/config src/instances/api.ts",
     "dev:payment": "tsx watch -r dotenv/config src/instances/payment.ts",
+    "dev:cron": "tsx watch -r dotenv/config src/instances/cron.ts",
+    "dev:worker": "tsx watch -r dotenv/config src/instances/worker.ts",
     "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json -f -fe .js && npm run build:assets",
     "build:assets": "mkdir -p dist/libs/fintech-ledger/src/db && cp libs/fintech-ledger/src/db/*.sql dist/libs/fintech-ledger/src/db/",
     "typecheck": "tsc --noEmit"

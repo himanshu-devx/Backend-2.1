@@ -97,6 +97,12 @@ export type EmailTemplateContextMap = {
   ADMIN_WELCOME: AdminWelcomeContext;
   PASSWORD_RESET: PasswordResetContext;
   OTP_VERIFICATION: OtpVerificationContext;
+  MERCHANT_ONBOARDED: {
+    name: string;
+    loginUrl: string;
+    payinEnabled: boolean;
+    payoutEnabled: boolean;
+  };
   REPORT_READY: {
     reportId: string;
     reportType: string;
@@ -276,7 +282,40 @@ export const emailTemplates: EmailTemplateFnMap = {
     };
   },
 
-  // 5. 📊 REPORT READY Template (Premium Design)
+  // 5. 📧 MERCHANT ONBOARDED Template
+  MERCHANT_ONBOARDED: (ctx) => {
+    const bodyContent = `
+      <h1 style="color: ${COLORS.success};">Account Onboarded Successfully!</h1>
+      <p>Hello <strong>${ctx.name}</strong>,</p>
+      <p>We are pleased to inform you that your merchant account has been successfully onboarded and activated on ${ENV.APP_BRAND_NAME}.</p>
+      
+      <h3 style="margin-top: 25px;">🚀 Enabled Services:</h3>
+      <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+        <tr>
+          <td style="${baseStyles.tableHeader}"><strong>Payin Service:</strong></td>
+          <td style="${baseStyles.tableData}">${ctx.payinEnabled ? "✅ Active" : "❌ Inactive"}</td>
+        </tr>
+        <tr>
+          <td style="${baseStyles.tableHeader}"><strong>Payout Service:</strong></td>
+          <td style="${baseStyles.tableData}">${ctx.payoutEnabled ? "✅ Active" : "❌ Inactive"}</td>
+        </tr>
+      </table>
+
+      <p style="text-align: center; margin-top: 30px;">
+        <a href="${ctx.loginUrl}" style="${baseStyles.button(COLORS.primary)}">Go to Merchant Dashboard</a>
+      </p>
+
+      <p style="font-size: 14px; color: #666; margin-top: 25px;">You can now access your dashboard to configure your API keys, whitelists, and start processing transactions.</p>
+    `;
+
+    return {
+      subject: `Your Merchant Account is Now Active - ${ENV.APP_BRAND_NAME}`,
+      html: baseEmailLayout(bodyContent),
+      text: `Hello ${ctx.name}, your merchant account is now active on ${ENV.APP_BRAND_NAME}. Login here: ${ctx.loginUrl}`,
+    };
+  },
+
+  // 6. 📊 REPORT READY Template (Premium Design)
   REPORT_READY: (ctx) => {
     const summaryHtml = ctx.summary ? `
       <div style="background-color: #f8f9fa; border: 1px solid ${COLORS.border}; border-radius: 8px; padding: 25px; margin: 25px 0;">
@@ -339,5 +378,6 @@ export const EmailTemplate = {
   ADMIN_WELCOME: "ADMIN_WELCOME" as EmailTemplateId,
   PASSWORD_RESET: "PASSWORD_RESET" as EmailTemplateId,
   OTP_VERIFICATION: "OTP_VERIFICATION" as EmailTemplateId,
+  MERCHANT_ONBOARDED: "MERCHANT_ONBOARDED" as EmailTemplateId,
   REPORT_READY: "REPORT_READY" as EmailTemplateId,
 } as const;
