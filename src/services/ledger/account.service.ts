@@ -76,14 +76,24 @@ export class AccountService {
         // Idempotent create: if account already exists, reuse it
         const existing = await LedgerService.getAccountById(id).catch(() => null);
         if (!existing) {
-            await LedgerService.createAccount({
-                id,
-                code,
-                type,
-                status: AccountStatus.ACTIVE,
-                allowOverdraft: params.allowOverdraft,
-                actorId: params.actorId,
-            });
+            try {
+                await LedgerService.createAccount({
+                    id,
+                    code,
+                    type,
+                    status: AccountStatus.ACTIVE,
+                    allowOverdraft: params.allowOverdraft,
+                    actorId: params.actorId,
+                });
+            } catch (error: any) {
+                // If it's a duplicate key error (Postgres 23505) on code or id, we assume it exists and return ID
+                if (error?.code === '23505' || error?.message?.includes('unique constraint')) {
+                    // Log warning but proceed
+                    console.warn(`[AccountService] Account ${id} (Code: ${code}) already exists. Reusing.`);
+                    return id;
+                }
+                throw error;
+            }
         }
 
         return id;
