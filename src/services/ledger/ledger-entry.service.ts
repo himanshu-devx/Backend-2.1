@@ -90,7 +90,7 @@ export class LedgerEntryService {
         accountId: string,
         options: GetEntriesOptions = {}
     ): Promise<PaginatedEntriesResponse> {
-        const normalizedAccountId = accountId.toUpperCase();
+        const normalizedAccountId = accountId.trim();
         const {
             page = 1,
             limit = 20,
@@ -245,7 +245,8 @@ export class LedgerEntryService {
     ) {
         const { getTodayRangeIST, parseDateRangeToIST } = await import('@/utils/date.util');
         const limit = options.limit || 100;
-        const normalSide = resolveNormalSide(accountId);
+        const normalizedAccountId = accountId.trim();
+        const normalSide = resolveNormalSide(normalizedAccountId);
 
         let start: Date;
         let end: Date;
@@ -261,13 +262,13 @@ export class LedgerEntryService {
         }
 
         // Fetch lines for statement
-        const statementLines = await new AccountStatement().getStatement(accountId.toUpperCase(), limit);
+        const statementLines = await new AccountStatement().getStatement(normalizedAccountId, limit);
         const entryAmountById = new Map<string, number>();
         try {
             const entryLimit = Math.max(limit, statementLines.length || 0);
-            const entries = await LedgerService.getEntries(accountId.toUpperCase(), { limit: entryLimit });
+            const entries = await LedgerService.getEntries(normalizedAccountId, { limit: entryLimit });
             for (const entry of entries || []) {
-                const line = entry?.lines?.find((l: any) => l.accountId === accountId.toUpperCase());
+                const line = entry?.lines?.find((l: any) => l.accountId === normalizedAccountId);
                 if (!line?.amount && line?.amount !== 0) continue;
                 entryAmountById.set(entry.id, toRupeesFromLedger(line.amount));
             }
@@ -276,7 +277,7 @@ export class LedgerEntryService {
         }
 
         // Use GeneralLedger to get accurate opening balance for the period
-        const glReport = await new GeneralLedger().getReport(accountId.toUpperCase(), start, end);
+        const glReport = await new GeneralLedger().getReport(normalizedAccountId, start, end);
 
         const formattedLines = statementLines.map((line: any) => {
             // Use normalized amount for debit/credit classification

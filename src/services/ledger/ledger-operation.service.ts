@@ -97,7 +97,7 @@ export class LedgerOperationService {
       ple.accounts?.payinAccountId ||
       LedgerUtils.generateAccountId(
         ENTITY_TYPE.PROVIDER,
-        ple.id.toUpperCase(),
+        ple.id,
         AccountType.ASSET,
         ENTITY_ACCOUNT_TYPE.PAYIN
       );
@@ -105,7 +105,7 @@ export class LedgerOperationService {
       ple.accounts?.payoutAccountId ||
       LedgerUtils.generateAccountId(
         ENTITY_TYPE.PROVIDER,
-        ple.id.toUpperCase(),
+        ple.id,
         AccountType.ASSET,
         ENTITY_ACCOUNT_TYPE.PAYOUT
       );
@@ -113,7 +113,7 @@ export class LedgerOperationService {
       ple.accounts?.expenseAccountId ||
       LedgerUtils.generateAccountId(
         ENTITY_TYPE.PROVIDER,
-        ple.id.toUpperCase(),
+        ple.id,
         AccountType.EXPENSE,
         ENTITY_ACCOUNT_TYPE.EXPENSE
       );
