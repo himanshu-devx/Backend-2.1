@@ -386,8 +386,8 @@ export class ProviderLegalEntityService {
       const pName = provider?.name || provider?.displayName || data.providerId;
       const lName = le?.name || le?.displayName || data.legalEntityId;
       data.name = `${pName} × ${lName}`;
-      // Machine ID - Normalized to uppercase for consistency
-      data.id = `${provider?.id}_${le?.id}`.toUpperCase();
+      // Use natural casing as per user request ("like old but new format i think lowercase and uppercase issue")
+      data.id = `${provider.id}_${le.id}`;
 
       // Populate integration & webhooks for persistence
       try {

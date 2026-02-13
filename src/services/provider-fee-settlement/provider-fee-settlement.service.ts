@@ -6,16 +6,16 @@ import { TransactionType } from "@/constants/transaction.constant";
 import { LedgerOperationService } from "@/services/ledger/ledger-operation.service";
 import { LedgerTransferService } from "@/services/ledger/ledger-transfer.service";
 import { LEDGER_OPERATION } from "@/constants/ledger-operations.constant";
-import { getISTDayStart, getISTDayEnd } from "@/utils/date.util";
+import { getISTDayStart, getISTDayEnd, getISTDate } from "@/utils/date.util";
 
 export class ProviderFeeSettlementService {
     /**
      * Enqueue settlement jobs for ALL Provider Legal Entities for "yesterday"
      */
     static async enqueueEodSettlement() {
-        const now = new Date();
-        // Yesterday in IST
-        const yesterday = new Date(now);
+        // Use IST Date to determine "Yesterday" relative to IST timezone
+        const nowIst = getISTDate();
+        const yesterday = new Date(nowIst);
         yesterday.setDate(yesterday.getDate() - 1);
         const dateStr = yesterday.toISOString().split('T')[0];
 

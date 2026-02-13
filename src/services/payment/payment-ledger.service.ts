@@ -21,7 +21,8 @@ export class PaymentLedgerService {
 
         const providerSettlementId = LedgerUtils.generateAccountId(
             ENTITY_TYPE.PROVIDER,
-            (transaction.providerLegalEntityId || transaction.providerId)!.toUpperCase(),
+            // Use natural casing as per update in ProviderLegalEntity service
+            `${transaction.providerId}_${transaction.legalEntityId}`,
             AccountType.ASSET,
             ENTITY_ACCOUNT_TYPE.PAYIN
         );
