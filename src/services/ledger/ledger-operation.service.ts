@@ -97,7 +97,7 @@ export class LedgerOperationService {
       ple.accounts?.payinAccountId ||
       LedgerUtils.generateAccountId(
         ENTITY_TYPE.PROVIDER,
-        providerId,
+        ple.id.toUpperCase(),
         AccountType.ASSET,
         ENTITY_ACCOUNT_TYPE.PAYIN
       );
@@ -105,7 +105,7 @@ export class LedgerOperationService {
       ple.accounts?.payoutAccountId ||
       LedgerUtils.generateAccountId(
         ENTITY_TYPE.PROVIDER,
-        providerId,
+        ple.id.toUpperCase(),
         AccountType.ASSET,
         ENTITY_ACCOUNT_TYPE.PAYOUT
       );
@@ -113,7 +113,7 @@ export class LedgerOperationService {
       ple.accounts?.expenseAccountId ||
       LedgerUtils.generateAccountId(
         ENTITY_TYPE.PROVIDER,
-        providerId,
+        ple.id.toUpperCase(),
         AccountType.EXPENSE,
         ENTITY_ACCOUNT_TYPE.EXPENSE
       );
@@ -150,7 +150,9 @@ export class LedgerOperationService {
       merchantId:
         parts.entityType === ENTITY_TYPE.MERCHANT ? parts.entityId : undefined,
       providerId:
-        parts.entityType === ENTITY_TYPE.PROVIDER ? parts.entityId : undefined,
+        parts.entityType === ENTITY_TYPE.PROVIDER ? parts.entityId.split('_')[0] : undefined,
+      providerLegalEntityId:
+        parts.entityType === ENTITY_TYPE.PROVIDER && parts.entityId.includes('_') ? parts.entityId : undefined,
       legalEntityId:
         parts.entityType === ENTITY_TYPE.LEGAL_ENTITY
           ? parts.entityId

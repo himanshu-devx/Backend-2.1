@@ -166,7 +166,7 @@ export class ProviderLegalEntityService {
           provider: ple.provider,
           legalEntity: ple.legalEntity,
           isOnboard: ple.isOnboard,
-          isActive:ple.isActive,
+          isActive: ple.isActive,
           payinAccount: ple.accounts?.payinAccountId ? {
             accountId: ple.accounts.payinAccountId,
             ledgerBalance: balances[ple.accounts.payinAccountId] || '0',
@@ -386,8 +386,8 @@ export class ProviderLegalEntityService {
       const pName = provider?.name || provider?.displayName || data.providerId;
       const lName = le?.name || le?.displayName || data.legalEntityId;
       data.name = `${pName} × ${lName}`;
-      // Machine ID
-      data.id = `${provider?.id}_${le?.id}`
+      // Machine ID - Normalized to uppercase for consistency
+      data.id = `${provider?.id}_${le?.id}`.toUpperCase();
 
       // Populate integration & webhooks for persistence
       try {
@@ -440,7 +440,7 @@ export class ProviderLegalEntityService {
     try {
       const { AccountService } = await import("@/services/ledger/account.service");
       createdAccounts = await AccountService.createProviderAccounts(
-        data.providerId!,
+        data.id!,
         data.name,
         auditContext?.actorEmail || "SYSTEM"
       );

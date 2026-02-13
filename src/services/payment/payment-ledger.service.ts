@@ -21,7 +21,7 @@ export class PaymentLedgerService {
 
         const providerSettlementId = LedgerUtils.generateAccountId(
             ENTITY_TYPE.PROVIDER,
-            transaction.providerId!,
+            (transaction.providerLegalEntityId || transaction.providerId)!.toUpperCase(),
             AccountType.ASSET,
             ENTITY_ACCOUNT_TYPE.PAYIN
         );
@@ -71,7 +71,7 @@ export class PaymentLedgerService {
      */
     static async initiatePayout(transaction: TransactionDocument) {
         const sourceId = LedgerUtils.generateAccountId(ENTITY_TYPE.MERCHANT, transaction.merchantId as string, AccountType.LIABILITY, ENTITY_ACCOUNT_TYPE.PAYOUT);
-        const providerSettlementId = LedgerUtils.generateAccountId(ENTITY_TYPE.PROVIDER, transaction.providerId!, AccountType.ASSET, ENTITY_ACCOUNT_TYPE.PAYOUT);
+        const providerSettlementId = LedgerUtils.generateAccountId(ENTITY_TYPE.PROVIDER, (transaction.providerLegalEntityId || transaction.providerId)!.toUpperCase(), AccountType.ASSET, ENTITY_ACCOUNT_TYPE.PAYOUT);
         const platformIncomeId = LedgerUtils.generateAccountId(ENTITY_TYPE.INCOME, "INCOME", AccountType.INCOME, ENTITY_ACCOUNT_TYPE.INCOME);
 
         const merchantFees = transaction.fees?.merchantFees;

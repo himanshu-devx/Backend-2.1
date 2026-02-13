@@ -142,14 +142,19 @@ export class LedgerTransferService {
     }
 
     let providerId = data.providerId;
-    if (!providerId) {
-      providerId =
-        (fromParts?.entityType === ENTITY_TYPE.PROVIDER
-          ? fromParts.entityId
-          : undefined) ||
-        (toParts?.entityType === ENTITY_TYPE.PROVIDER
-          ? toParts.entityId
-          : undefined);
+    let providerLegalEntityId = data.providerLegalEntityId;
+
+    const fromProviderId = fromParts?.entityType === ENTITY_TYPE.PROVIDER ? fromParts.entityId : undefined;
+    const toProviderId = toParts?.entityType === ENTITY_TYPE.PROVIDER ? toParts.entityId : undefined;
+    const resolvedProviderId = fromProviderId || toProviderId;
+
+    if (resolvedProviderId) {
+      if (!providerId) {
+        providerId = resolvedProviderId.split('_')[0];
+      }
+      if (!providerLegalEntityId && resolvedProviderId.includes('_')) {
+        providerLegalEntityId = resolvedProviderId;
+      }
     }
 
     let legalEntityId = data.legalEntityId;

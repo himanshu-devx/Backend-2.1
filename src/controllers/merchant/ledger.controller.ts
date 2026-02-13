@@ -10,11 +10,15 @@ export const getMyLedgerEntries = async (c: Context) => {
         const merchantId = c.get('id');
         const accountId = c.req.param('accountId');
 
+        console.log(`[DEBUG] getMyLedgerEntries: merchantId=${merchantId}, accountId=${accountId}`);
+
         if (!accountId) {
             return c.json({ success: false, message: 'Account ID is required' }, 400);
         }
 
         const ownsAccount = await LedgerEntryService.verifyMerchantOwnership(merchantId, accountId);
+        console.log(`[DEBUG] getMyLedgerEntries: ownsAccount=${ownsAccount}`);
+
         if (!ownsAccount) {
             return c.json({ success: false, message: 'You do not have access to this account' }, 403);
         }

@@ -90,6 +90,7 @@ export class LedgerEntryService {
         accountId: string,
         options: GetEntriesOptions = {}
     ): Promise<PaginatedEntriesResponse> {
+        const normalizedAccountId = accountId.toUpperCase();
         const {
             page = 1,
             limit = 20,
@@ -108,12 +109,12 @@ export class LedgerEntryService {
         const validatedPage = Math.max(1, page);
 
         const fetchLimit = validatedLimit * validatedPage + 100;
-        const allEntries = await LedgerService.getEntries(accountId, { limit: fetchLimit });
-        const normalSide = resolveNormalSide(accountId);
+        const allEntries = await LedgerService.getEntries(normalizedAccountId, { limit: fetchLimit });
+        const normalSide = resolveNormalSide(normalizedAccountId);
 
         const balanceByEntryId = new Map<string, any>();
         try {
-            const statementLines = await new AccountStatement().getStatement(accountId, fetchLimit);
+            const statementLines = await new AccountStatement().getStatement(normalizedAccountId, fetchLimit);
             for (const line of statementLines) {
                 if (line?.entryId) {
                     balanceByEntryId.set(line.entryId, line.balanceAfter);
@@ -141,7 +142,7 @@ export class LedgerEntryService {
 
         if (type) {
             filteredEntries = filteredEntries.filter((entry: any) => {
-                const line = entry.lines?.find((l: any) => l.accountId === accountId);
+                const line = entry.lines?.find((l: any) => l.accountId === normalizedAccountId);
                 if (!line) return false;
                 const amt = toRupeesFromLedger(line.amount);
                 if (Number.isNaN(amt)) return false;
@@ -152,7 +153,7 @@ export class LedgerEntryService {
 
         if (minAmount !== undefined || maxAmount !== undefined) {
             filteredEntries = filteredEntries.filter((entry: any) => {
-                const line = entry.lines?.find((l: any) => l.accountId === accountId);
+                const line = entry.lines?.find((l: any) => l.accountId === normalizedAccountId);
                 if (!line) return false;
                 const amount = Math.abs(toRupeesFromLedger(line.amount));
                 if (minAmount !== undefined && amount < minAmount) return false;
@@ -165,8 +166,8 @@ export class LedgerEntryService {
             let aValue: any;
             let bValue: any;
             if (sortBy === 'amount') {
-                const aLine = a.lines?.find((l: any) => l.accountId === accountId);
-                const bLine = b.lines?.find((l: any) => l.accountId === accountId);
+                const aLine = a.lines?.find((l: any) => l.accountId === normalizedAccountId);
+                const bLine = b.lines?.find((l: any) => l.accountId === normalizedAccountId);
                 aValue = aLine ? Math.abs(toRupeesFromLedger(aLine.amount)) : 0;
                 bValue = bLine ? Math.abs(toRupeesFromLedger(bLine.amount)) : 0;
             } else if (sortBy === 'postedAt') {
@@ -185,7 +186,7 @@ export class LedgerEntryService {
         const paginatedEntries = filteredEntries.slice(startIndex, startIndex + validatedLimit);
 
         const formattedEntries = paginatedEntries.map((entry: any) => {
-            const line = entry.lines?.find((l: any) => l.accountId === accountId);
+            const line = entry.lines?.find((l: any) => l.accountId === normalizedAccountId);
             const rawVal = line?.amount || '0';
             const amountValue = toRupeesFromLedger(rawVal);
             const side = classifySide(amountValue, normalSide);
@@ -204,7 +205,7 @@ export class LedgerEntryService {
                 runningBalance,
                 balance: runningBalance,
                 relatedEntries: entry.lines
-                    ?.filter((l: any) => l.accountId !== accountId)
+                    ?.filter((l: any) => l.accountId !== normalizedAccountId)
                     .map((l: any) => {
                         const rVal = l.amount || '0';
                         const rAmt = toRupeesFromLedger(rVal);
@@ -230,7 +231,7 @@ export class LedgerEntryService {
                 total,
                 totalPages,
             },
-            filters: { accountId, status, type, startDate, endDate, minAmount, maxAmount, description }
+            filters: { accountId: normalizedAccountId, status, type, startDate, endDate, minAmount, maxAmount, description }
         };
     }
 
@@ -238,7 +239,10 @@ export class LedgerEntryService {
      * 2. Get Account Statement: Optimized for Reconciliation.
      * Features: Opening Balance, Running Balances, Closing Balance.
      */
-    static async getAccountStatement(accountId: string, options: { startDate?: string; endDate?: string; limit?: number } = {}) {
+    static async getAccountStatement(
+        accountId: string,
+        options: { startDate?: string; endDate?: string; limit?: number } = {}
+    ) {
         const { getTodayRangeIST, parseDateRangeToIST } = await import('@/utils/date.util');
         const limit = options.limit || 100;
         const normalSide = resolveNormalSide(accountId);
@@ -257,13 +261,13 @@ export class LedgerEntryService {
         }
 
         // Fetch lines for statement
-        const statementLines = await new AccountStatement().getStatement(accountId, limit);
+        const statementLines = await new AccountStatement().getStatement(accountId.toUpperCase(), limit);
         const entryAmountById = new Map<string, number>();
         try {
             const entryLimit = Math.max(limit, statementLines.length || 0);
-            const entries = await LedgerService.getEntries(accountId, { limit: entryLimit });
+            const entries = await LedgerService.getEntries(accountId.toUpperCase(), { limit: entryLimit });
             for (const entry of entries || []) {
-                const line = entry?.lines?.find((l: any) => l.accountId === accountId);
+                const line = entry?.lines?.find((l: any) => l.accountId === accountId.toUpperCase());
                 if (!line?.amount && line?.amount !== 0) continue;
                 entryAmountById.set(entry.id, toRupeesFromLedger(line.amount));
             }
@@ -272,7 +276,7 @@ export class LedgerEntryService {
         }
 
         // Use GeneralLedger to get accurate opening balance for the period
-        const glReport = await new GeneralLedger().getReport(accountId, start, end);
+        const glReport = await new GeneralLedger().getReport(accountId.toUpperCase(), start, end);
 
         const formattedLines = statementLines.map((line: any) => {
             // Use normalized amount for debit/credit classification
@@ -312,7 +316,11 @@ export class LedgerEntryService {
      * 3. Get General Ledger (Account): Optimized for Period Audit.
      * Features: Period Summary (Aggregates).
      */
-    static async getGeneralLedger(accountId: string, startDate?: string, endDate?: string) {
+    static async getGeneralLedger(
+        accountId: string,
+        startDate?: string,
+        endDate?: string
+    ) {
         const { getTodayRangeIST, parseDateRangeToIST } = await import('@/utils/date.util');
         let start: Date;
         let end: Date;
@@ -377,16 +385,26 @@ export class LedgerEntryService {
         merchantId: string,
         accountId: string
     ): Promise<boolean> {
-        const expectedPart = `:MERCHANT:${merchantId}:`;
-        if (!accountId.includes(expectedPart)) return false;
+        if (!merchantId || !accountId) return false;
 
-        const merchant = await merchantRepository.findById(merchantId);
+        const normalizedMerchantId = merchantId.toUpperCase();
+        const normalizedAccountId = accountId.toUpperCase();
+
+        const expectedPart = `:MERCHANT:${normalizedMerchantId}:`;
+        if (!normalizedAccountId.includes(expectedPart)) return false;
+
+        const merchant = await merchantRepository.findById(normalizedMerchantId);
         if (!merchant) return false;
 
         const merchantObj = (merchant as any).toObject ? (merchant as any).toObject() : merchant;
         const merchantAccounts = merchantObj.accounts || {};
-        const accountIds = Object.values(merchantAccounts).map((v: any) => v?.toString()).filter(Boolean);
-        return accountIds.includes(accountId);
+
+        // Check if any of the stored account IDs match the requested account ID (case-insensitive)
+        const accountIds = Object.values(merchantAccounts)
+            .map((v: any) => v?.toString().toUpperCase())
+            .filter(Boolean);
+
+        return accountIds.includes(normalizedAccountId);
     }
 
     /**
