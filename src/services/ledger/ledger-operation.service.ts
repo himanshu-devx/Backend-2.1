@@ -269,46 +269,60 @@ export class LedgerOperationService {
       op === LEDGER_OPERATION.LEGAL_ENTITY_SETTLEMENT ||
       op === LEDGER_OPERATION.PLE_SETTLEMENT
     ) {
-      from = { accountId: ple.payinAccountId };
-      to = {
+      // OLD: from Payin -> to LE Bank
+      // NEW: from LE Bank -> to Payin (Reversed)
+      from = {
         entityType: ENTITY_TYPE.LEGAL_ENTITY,
         entityId: leid,
         purpose: ENTITY_ACCOUNT_TYPE.BANK,
       };
+      to = { accountId: ple.payinAccountId };
     } else if (
       op === LEDGER_OPERATION.LEGAL_ENTITY_DEPOSIT ||
       op === LEDGER_OPERATION.PLE_DEPOSIT
     ) {
-      from = {
+      // OLD: from LE Bank -> to Payout
+      // NEW: from Payout -> to LE Bank (Reversed)
+      from = { accountId: ple.payoutAccountId };
+      to = {
         entityType: ENTITY_TYPE.LEGAL_ENTITY,
         entityId: leid,
         purpose: ENTITY_ACCOUNT_TYPE.BANK,
       };
-      to = { accountId: ple.payoutAccountId };
     } else if (op === LEDGER_OPERATION.PLE_EXPENSE_SETTLEMENT) {
-      from = { accountId: ple.expenseAccountId };
-      to = {
+      // OLD: from Expense -> to Income
+      // NEW: from Income -> to Expense (Reversed)
+      from = {
         entityType: ENTITY_TYPE.INCOME,
         entityId: "INCOME",
         purpose: ENTITY_ACCOUNT_TYPE.INCOME,
       };
+      to = { accountId: ple.expenseAccountId };
     } else if (op === LEDGER_OPERATION.PLE_EXPENSE_CHARGE) {
-      from = { accountId: ple.payinAccountId };
-      to = { accountId: ple.expenseAccountId };
+      // OLD: from Payin -> to Expense
+      // NEW: from Expense -> to Payin (Reversed)
+      from = { accountId: ple.expenseAccountId };
+      to = { accountId: ple.payinAccountId };
     } else if (op === LEDGER_OPERATION.PLE_PAYIN_FEE_CHARGE) {
-      from = { accountId: ple.payinAccountId };
-      to = { accountId: ple.expenseAccountId };
+      // OLD: from Payin -> to Expense
+      // NEW: from Expense -> to Payin (Reversed)
+      from = { accountId: ple.expenseAccountId };
+      to = { accountId: ple.payinAccountId };
     } else if (op === LEDGER_OPERATION.PLE_PAYOUT_FEE_CHARGE) {
-      from = { accountId: ple.payoutAccountId };
-      to = { accountId: ple.expenseAccountId };
+      // OLD: from Payout -> to Expense
+      // NEW: from Expense -> to Payout (Reversed)
+      from = { accountId: ple.expenseAccountId };
+      to = { accountId: ple.payoutAccountId };
     } else if (op === LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT) {
       if (!leid) throw BadRequest("legalEntityId is required");
-      from = {
+      // OLD: from LE Bank -> to World
+      // NEW: from World -> to LE Bank (Reversed)
+      from = { world: true };
+      to = {
         entityType: ENTITY_TYPE.LEGAL_ENTITY,
         entityId: leid,
         purpose: ENTITY_ACCOUNT_TYPE.BANK,
       };
-      to = { world: true };
       return {
         from, to,
         metadata: {},
