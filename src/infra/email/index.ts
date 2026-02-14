@@ -1,4 +1,8 @@
-import { ZeptoMailEmailProvider } from "./provider";
 import { EmailService } from "@/services/email.service";
+import { createEmailProvider, type EmailProviderName } from "./provider";
+import { ENV } from "@/config/env";
 
-export const emailService = new EmailService(new ZeptoMailEmailProvider());
+const providerName = (ENV.MAIL_PROVIDER || "zeptomail") as EmailProviderName;
+const provider = createEmailProvider(providerName);
+
+export const emailService = new EmailService(provider);

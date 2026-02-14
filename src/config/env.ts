@@ -21,11 +21,8 @@ const schema = z.object({
   POSTGRES_DB: z.string().default("app_ledger"),
   POSTGRES_POOL_MAX: z.string().default("20"),
 
-  SMTP_HOST: z.string().default("smtp.gmail.com"),
-  SMTP_PORT: z.coerce.number().default(587),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
-  SMTP_SECURE: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(false)),
+  // NOTE: Email provider config updated using Codex.
+  MAIL_PROVIDER: z.enum(["zeptomail", "maileroo"]).default("zeptomail"),
   MAIL_FROM_EMAIL: z.string().email().optional(),
   MAIL_FROM_NAME: z.string().optional(),
   ZEPTOMAIL_API_KEY: z.string().optional(),
@@ -33,6 +30,10 @@ const schema = z.object({
   ZEPTOMAIL_FROM_NAME: z.string().optional(),
   ZEPTOMAIL_BOUNCE_ADDRESS: z.string().optional(),
   ZEPTOMAIL_URL: z.string().url().optional(),
+  MAILEROO_API_KEY: z.string().optional(),
+  MAILEROO_FROM_EMAIL: z.string().email().optional(),
+  MAILEROO_FROM_NAME: z.string().optional(),
+  MAILEROO_URL: z.string().url().optional(),
 
   APP_BRAND_NAME: z.string().default("Your App"),
   APP_BRAND_PREFIX: z.string().optional(),
@@ -89,11 +90,7 @@ export const ENV: Env = schema.parse({
   POSTGRES_DB: process.env.POSTGRES_DB,
   POSTGRES_POOL_MAX: process.env.POSTGRES_POOL_MAX,
 
-  SMTP_HOST: process.env.SMTP_HOST,
-  SMTP_PORT: process.env.SMTP_PORT,
-  SMTP_USER: process.env.SMTP_USER,
-  SMTP_PASS: process.env.SMTP_PASS,
-  SMTP_SECURE: process.env.SMTP_SECURE,
+  MAIL_PROVIDER: process.env.MAIL_PROVIDER,
   MAIL_FROM_EMAIL: process.env.MAIL_FROM_EMAIL,
   MAIL_FROM_NAME: process.env.MAIL_FROM_NAME,
   ZEPTOMAIL_API_KEY: process.env.ZEPTOMAIL_API_KEY,
@@ -101,6 +98,10 @@ export const ENV: Env = schema.parse({
   ZEPTOMAIL_FROM_NAME: process.env.ZEPTOMAIL_FROM_NAME,
   ZEPTOMAIL_BOUNCE_ADDRESS: process.env.ZEPTOMAIL_BOUNCE_ADDRESS,
   ZEPTOMAIL_URL: process.env.ZEPTOMAIL_URL,
+  MAILEROO_API_KEY: process.env.MAILEROO_API_KEY,
+  MAILEROO_FROM_EMAIL: process.env.MAILEROO_FROM_EMAIL,
+  MAILEROO_FROM_NAME: process.env.MAILEROO_FROM_NAME,
+  MAILEROO_URL: process.env.MAILEROO_URL,
 
   APP_BRAND_NAME: process.env.APP_BRAND_NAME,
   APP_BASE_URL: process.env.APP_BASE_URL,

@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import axios from "axios";
 import { SendMailClient } from "zeptomail";
 import type { Logger } from "pino";
 import { ENV } from "@/config/env";
@@ -12,6 +12,24 @@ export interface EmailPayload {
 
 export interface EmailProvider {
   sendMail(payload: EmailPayload, logger?: Logger): Promise<void>;
+}
+
+export type EmailProviderName = "zeptomail" | "maileroo";
+
+export const EMAIL_PROVIDER_NAMES: readonly EmailProviderName[] = [
+  "zeptomail",
+  "maileroo",
+];
+
+export function createEmailProvider(name: EmailProviderName): EmailProvider {
+  switch (name) {
+    case "zeptomail":
+      return new ZeptoMailEmailProvider();
+    case "maileroo":
+      return new MailerooEmailProvider();
+    default:
+      throw new Error(`Unsupported email provider: ${name}`);
+  }
 }
 
 export class ZeptoMailEmailProvider implements EmailProvider {
@@ -31,11 +49,17 @@ export class ZeptoMailEmailProvider implements EmailProvider {
   async sendMail(payload: EmailPayload, logger?: Logger): Promise<void> {
     try {
       const fromEmail = ENV.ZEPTOMAIL_FROM_EMAIL || ENV.MAIL_FROM_EMAIL;
-      const fromName = ENV.ZEPTOMAIL_FROM_NAME || ENV.MAIL_FROM_NAME || ENV.APP_BRAND_NAME || "App";
+      const fromName =
+        ENV.ZEPTOMAIL_FROM_NAME ||
+        ENV.MAIL_FROM_NAME ||
+        ENV.APP_BRAND_NAME ||
+        "App";
       const bounceAddress = ENV.ZEPTOMAIL_BOUNCE_ADDRESS;
 
       if (!fromEmail) {
-        throw new Error("Sender email (ZEPTOMAIL_FROM_EMAIL or MAIL_FROM_EMAIL) is required");
+        throw new Error(
+          "Sender email (ZEPTOMAIL_FROM_EMAIL or MAIL_FROM_EMAIL) is required"
+        );
       }
 
       const toList = Array.isArray(payload.to) ? payload.to : [payload.to];
@@ -48,7 +72,7 @@ export class ZeptoMailEmailProvider implements EmailProvider {
         to: toList.map((email) => ({
           email_address: {
             address: email,
-            name: email, // ZeptoMail likes names, we'll use email as name
+            name: email,
           },
         })),
         subject: payload.subject,
@@ -79,92 +103,83 @@ export class ZeptoMailEmailProvider implements EmailProvider {
   }
 }
 
-export class SmtpEmailProvider implements EmailProvider {
-  private transporter: nodemailer.Transporter;
+export class MailerooEmailProvider implements EmailProvider {
+  private client = axios.create({
+    baseURL: ENV.MAILEROO_URL || "https://smtp.maileroo.com/api/v2",
+    timeout: 15000,
+  });
+
+  private apiKey: string;
+  private fromEmail: string;
+  private fromName: string;
 
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: ENV.SMTP_HOST || "smtp.gmail.com",
-      port: ENV.SMTP_PORT || 587,
-      secure: ENV.SMTP_SECURE, // true for 465, false for other ports
-      auth: {
-        user: ENV.SMTP_USER,
-        pass: ENV.SMTP_PASS,
-      },
-    });
+    const apiKey = ENV.MAILEROO_API_KEY;
+
+    if (!apiKey) {
+      throw new Error("MAILEROO_API_KEY is required for MailerooEmailProvider");
+    }
+
+    const fromEmail = ENV.MAILEROO_FROM_EMAIL || ENV.MAIL_FROM_EMAIL;
+    const fromName =
+      ENV.MAILEROO_FROM_NAME ||
+      ENV.MAIL_FROM_NAME ||
+      ENV.APP_BRAND_NAME ||
+      "App";
+
+    if (!fromEmail) {
+      throw new Error(
+        "Sender email (MAILEROO_FROM_EMAIL or MAIL_FROM_EMAIL) is required"
+      );
+    }
+
+    this.apiKey = apiKey;
+    this.fromEmail = fromEmail;
+    this.fromName = fromName;
   }
 
   async sendMail(payload: EmailPayload, logger?: Logger): Promise<void> {
     try {
-      const fromEmail = ENV.MAIL_FROM_EMAIL || ENV.SMTP_USER;
-      const fromName = ENV.MAIL_FROM_NAME || ENV.APP_BRAND_NAME || "App";
-
-      const info = await this.transporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
-        to: Array.isArray(payload.to) ? payload.to.join(", ") : payload.to,
+      const toList = Array.isArray(payload.to) ? payload.to : [payload.to];
+      const body: Record<string, unknown> = {
+        from: {
+          address: this.fromEmail,
+          display_name: this.fromName,
+        },
+        to: toList.map((email) => ({
+          address: email,
+          display_name: email,
+        })),
         subject: payload.subject,
-        text: payload.text,
         html: payload.html,
+      };
+
+      if (payload.text) {
+        body.plain = payload.text;
+      }
+
+      const response = await this.client.post("/emails", body, {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
       });
+
+      if (response?.data?.success === false) {
+        const message =
+          response?.data?.message || "Maileroo API returned success=false";
+        throw new Error(message);
+      }
 
       logger?.info(
         {
-          messageId: info.messageId,
           to: payload.to,
           subject: payload.subject,
         },
-        "Email sent via SMTP"
+        "Email sent via Maileroo API"
       );
     } catch (err) {
-      logger?.error({ err }, "Failed to send email via SMTP");
-      throw err;
-    }
-  }
-}
-
-export class MailerSendEmailProvider implements EmailProvider {
-  // Keeping as an option, but we will switch the index to use SMTP
-  private client: any; // Using any to avoid mandatory mailersend import if not used
-  private from: any;
-
-  constructor() {
-    // Lazy load or just keep for reference
-    const { MailerSend, Sender } = require("mailersend");
-    this.client = new MailerSend({ apiKey: (ENV as any).MAILERSEND_API_KEY });
-    this.from = new Sender(
-      (ENV as any).MAILERSEND_FROM_EMAIL,
-      (ENV as any).MAILERSEND_FROM_NAME || ENV.APP_BRAND_NAME || "App"
-    );
-  }
-
-  async sendMail(payload: EmailPayload, logger?: Logger): Promise<void> {
-    const { EmailParams, Recipient } = require("mailersend");
-    try {
-      const toList = Array.isArray(payload.to) ? payload.to : [payload.to];
-      const recipients = toList.map((email: string) => new Recipient(email, email));
-
-      const emailParams = new EmailParams()
-        .setFrom(this.from)
-        .setTo(recipients)
-        .setReplyTo(this.from)
-        .setSubject(payload.subject)
-        .setHtml(payload.html);
-
-      if (payload.text) {
-        emailParams.setText(payload.text);
-      }
-
-      await this.client.email.send(emailParams);
-
-      logger?.info(
-        {
-          email: payload.to,
-          subject: payload.subject,
-        },
-        "Email sent via MailerSend"
-      );
-    } catch (err) {
-      logger?.error({ err }, "Failed to send email via MailerSend");
+      logger?.error({ err }, "Failed to send email via Maileroo API");
       throw err;
     }
   }
