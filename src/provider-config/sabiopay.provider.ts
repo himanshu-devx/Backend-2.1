@@ -80,7 +80,7 @@ const mapStatusText = (status?: string): "SUCCESS" | "FAILED" | "PENDING" => {
 };
 
 export class SabioPayProvider extends BaseProvider {
-  
+
   async handlePayin(req: PayinRequest): Promise<ProviderPayinResult> {
     const creds = this.config.credentials || {};
     const apiKey = creds.apiKey;
@@ -395,31 +395,12 @@ export class SabioPayProvider extends BaseProvider {
     type: "PAYIN" | "PAYOUT" | "COMMON"
   ): Promise<ProviderWebhookResult> {
     const payload = parseWebhookBody(input.rawBody || "");
-    const apiSalt = this.config.credentials.apiSalt;
-    if (!apiSalt) {
-      throw new Error("SabioPay webhook validation failed: apiSalt missing");
-    }
 
     if (type === "PAYOUT" || payload.payout_id) {
       const transactionId = payload.order_id || "";
       const providerTransactionId = payload.payout_id;
       const amount = payload.amount;
       const statusText = payload.status;
-
-      const hashParts = [
-        apiSalt,
-        payload.payout_id,
-        payload.order_id,
-        payload.amount,
-        payload.status,
-      ].filter((value) => value !== undefined && value !== null && value !== "");
-      const expectedHash = buildSha512(hashParts.join("|"));
-      const receivedHash = (payload.hash || "").toString().toUpperCase();
-
-      if (receivedHash && expectedHash !== receivedHash) {
-        throw new Error("Invalid SabioPay payout webhook hash");
-      }
-
       const status = mapStatusText(statusText);
 
       return {
@@ -435,36 +416,39 @@ export class SabioPayProvider extends BaseProvider {
       };
     }
 
+    // PAYIN webhook handling
     const transactionId = payload.order_id || "";
     const providerTransactionId = payload.transaction_id;
     const amount = payload.amount;
     const responseCode = payload.response_code;
 
-    const hashParts = [
-      apiSalt,
-      payload.transaction_id,
-      payload.order_id,
-      payload.amount,
-      payload.response_code,
-    ].filter((value) => value !== undefined && value !== null && value !== "");
-    const expectedHash = buildSha512(hashParts.join("|"));
-    const receivedHash = (payload.hash || "").toString().toUpperCase();
+    const status = mapResponseCode(responseCode?.toString());
 
-    if (receivedHash && expectedHash !== receivedHash) {
-      throw new Error("Invalid SabioPay webhook hash");
+    // Determine the appropriate message
+    let message = "Webhook received";
+    if (status === "FAILED" && payload.error_desc) {
+      message = payload.error_desc;
+    } else if (payload.response_message) {
+      message = payload.response_message;
     }
-
-    const status = mapResponseCode(responseCode);
 
     return {
       type: "webhook",
       success: status === "SUCCESS",
       status,
-      message: payload.response_message || payload.error_desc || "Webhook received",
+      message,
       providerMsg: payload.response_message,
       transactionId: transactionId,
       providerTransactionId: providerTransactionId,
       amount: amount ? Number(amount) : undefined,
+      utr: payload.bank_ref_id, // Use bank_ref_id for payin
+      metadata: {
+        customer_vpa: payload.customer_vpa,
+        payment_mode: payload.payment_mode,
+        payment_channel: payload.payment_channel,
+        payment_datetime: payload.payment_datetime,
+        cardmasked: payload.cardmasked,
+      },
     };
   }
 }

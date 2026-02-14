@@ -111,4 +111,5 @@ export interface ProviderWebhookResult {
   amount?: number;
   utr?: string;
   error?: unknown;
+  metadata?: Record<string, string | undefined>;
 }
