@@ -4,6 +4,7 @@ export interface ProviderCredentials {
   apiKey?: string;
   apiSecret?: string;
   apiSalt?: string;
+  apiToken?: string;
   merchantId?: string;
   webhookSecret?: string;
   baseUrl?: string;

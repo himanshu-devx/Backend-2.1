@@ -1,0 +1,23 @@
+{
+  "request": {
+    "amount": 11,
+    "transactionId": "TPIPAY_TEST_1771155850822",
+    "orderId": "ORD1771155850822",
+    "customerName": "Test User",
+    "customerEmail": "test1771155850822@example.com",
+    "customerPhone": "9876543210",
+    "paymentMode": "UPI",
+    "callbackUrl": "https://example.com/tpipay-callback",
+    "remarks": "Direct TPIPAY live test"
+  },
+  "response": {
+    "type": "payin",
+    "success": true,
+    "status": "PENDING",
+    "message": "Transaction Created",
+    "transactionId": "TPIPAY_TEST_1771155850822",
+    "providerTransactionId": "1771155850822779",
+    "amount": 11,
+    "result": "upi://pay?pa=kdas2024@nsdlpbma&pn=KDAS%20TECHNOLOGIES%20OPC%20PRIVATE%20LIMITED&mc=7372&tr=530236507440021791&tn=SchedulerTest&am=11.00&cu=INR&mode=05&orgid=181046&purpose=00&catagory=01&tid=NPT00000000000000530236507440021791&sign=MEQCIBuRGNFriNf4hJlUvLVEpcmOr3W+0rwVdGUny/mD+gs7AiBy81dE7ep0CmV8+4TMICvDYhiL0ePdfJsLOJSiWlh3xw=="
+  }
+}

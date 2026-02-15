@@ -53,7 +53,24 @@ export class WebhookWorkflow {
         if (!result.transactionId) throw new Error("No transactionId in webhook");
 
         // 3. Persistent Record & Lock
-        const transaction = await TransactionModel.findOne({ id: result.transactionId });
+        let transaction = await TransactionModel.findOne({ id: result.transactionId });
+        if (!transaction) {
+            const refCandidates = [
+                result.transactionId,
+                result.providerTransactionId
+            ].filter(Boolean) as string[];
+
+            for (const ref of refCandidates) {
+                transaction = await TransactionModel.findOne({ providerRef: ref, providerId });
+                if (transaction) {
+                    logger.info(
+                        { transactionId: transaction.id, providerId, providerRef: ref },
+                        "[WebhookWorkflow] Transaction matched by providerRef"
+                    );
+                    break;
+                }
+            }
+        }
         if (!transaction) {
             logger.error(
                 { transactionId: result.transactionId, providerId, legalEntityId },
@@ -63,6 +80,12 @@ export class WebhookWorkflow {
         }
 
         if (transaction.status !== TransactionStatus.PENDING) {
+            transaction.events.push({
+                type: "WEBHOOK_DUPLICATE",
+                timestamp: getISTDate(),
+                payload: result
+            });
+            await transaction.save();
             logger.info(
                 { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
                 "[WebhookWorkflow] Transaction already processed"
