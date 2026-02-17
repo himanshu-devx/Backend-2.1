@@ -18,12 +18,19 @@ type SabioResponse = {
     upi_intent_url?: string;
     payment_request_id?: string | number;
     order_id?: string;
+    merchant_reference_number?: string;
     payout_id?: string;
     status?: string;
+    transaction_id?: string;
+    transaction_reference_number?: string;
     bank_reference_number?: string | null;
+    error_message?: string | null;
   };
   message?: string;
-  error?: string;
+  error?: {
+    code?: number | string;
+    message?: string;
+  } | string;
   error_code?: number;
 };
 
@@ -74,9 +81,21 @@ const mapResponseCode = (code?: string): "SUCCESS" | "FAILED" | "PENDING" => {
 const mapStatusText = (status?: string): "SUCCESS" | "FAILED" | "PENDING" => {
   if (!status) return "PENDING";
   const normalized = status.toUpperCase();
-  if (normalized === "SUCCESS") return "SUCCESS";
-  if (normalized === "PENDING" || normalized === "PROCESSING") return "PENDING";
-  return "FAILED";
+  if (["SUCCESS", "SENT_TO_BENEFICIARY"].includes(normalized)) return "SUCCESS";
+  if (["PROCESSING", "INCOMPLETE", "PENDING"].includes(normalized)) return "PENDING";
+  if (["FAILED", "FAILURE", "RETURNED_FROM_BENEFICIARY"].includes(normalized)) return "FAILED";
+  return "PENDING";
+};
+
+const resolveTransferType = (mode?: string, amount?: number): "NEFT" | "IMPS" => {
+  if (amount && amount > 200000) return "NEFT";
+  const normalized = (mode || "").toUpperCase();
+  if (normalized === "NEFT") return "NEFT";
+  if (normalized === "IMPS") return "IMPS";
+  if (normalized === "RTGS") return "NEFT";
+  if (normalized === "UPI") return "IMPS";
+  if (amount && amount > 200000) return "NEFT";
+  return "IMPS";
 };
 
 export class SabioPayProvider extends BaseProvider {
@@ -222,7 +241,6 @@ export class SabioPayProvider extends BaseProvider {
     const apiKey = creds.apiKey;
     const apiSalt = creds.apiSalt;
     const baseUrl = creds.baseUrl || DEFAULT_BASE_URL;
-    const currency = creds.currency || "INR";
 
     if (!apiKey || !apiSalt) {
       return this.formatErrorResponse(
@@ -248,42 +266,41 @@ export class SabioPayProvider extends BaseProvider {
 
     const amountStr = formatAmount(req.amount);
     const orderId = req.transactionId;
-    const mode = req.mode;
+    const transferType = resolveTransferType(req.mode, req.amount);
 
     const hashPayload: Record<string, string | number | undefined> = {
       api_key: apiKey,
-      order_id: orderId,
+      merchant_reference_number: orderId,
       amount: amountStr,
-      currency,
-      beneficiary_name: req.beneficiaryName,
-      beneficiary_account_number: req.beneficiaryAccountNumber,
-      beneficiary_ifsc: req.beneficiaryBankIfsc,
-      mode,
+      transfer_type: transferType,
+      account_name: req.beneficiaryName,
+      account_number: req.beneficiaryAccountNumber,
+      ifsc_code: req.beneficiaryBankIfsc,
+      bank_name: req.beneficiaryBankName,
     };
     const hash = buildSortedHash(hashPayload, apiSalt);
 
-    const payload = {
-      api_key: apiKey,
-      order_id: orderId,
-      amount: amountStr,
-      currency,
-      beneficiary_name: req.beneficiaryName,
-      beneficiary_account_number: req.beneficiaryAccountNumber,
-      beneficiary_ifsc: req.beneficiaryBankIfsc,
-      beneficiary_phone: req.beneficiaryPhone,
-      mode,
-      purpose: req.remarks || "Payout",
-      hash,
-    };
+    const payload = new URLSearchParams();
+    payload.set("api_key", apiKey);
+    payload.set("merchant_reference_number", orderId);
+    payload.set("amount", amountStr);
+    payload.set("transfer_type", transferType);
+    payload.set("account_name", req.beneficiaryName);
+    payload.set("account_number", req.beneficiaryAccountNumber);
+    payload.set("ifsc_code", req.beneficiaryBankIfsc);
+    if (req.beneficiaryBankName) {
+      payload.set("bank_name", req.beneficiaryBankName);
+    }
+    if (hash) payload.set("hash", hash);
 
-    const url = `${baseUrl.replace(/\/+$/, "")}/v2/payment/payout/initiate`;
+    const url = `${baseUrl.replace(/\/+$/, "")}/v3/fundtransfer`;
 
     try {
       const response = await this.request<SabioResponse>({
         method: "POST",
         url,
-        data: payload,
-        headers: { "Content-Type": "application/json" },
+        data: payload.toString(),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         context: {
           action: "payout_initiate",
           transactionId: req.transactionId,
@@ -291,14 +308,21 @@ export class SabioPayProvider extends BaseProvider {
       });
 
       if ((response.data as any)?.error) {
+        const errorBlock = (response.data as any)?.error;
         const errMsg =
-          (response.data as any)?.error?.message || "SabioPay payout error";
+          errorBlock?.message ||
+          (typeof errorBlock === "string" ? errorBlock : null) ||
+          "SabioPay payout error";
         throw new Error(errMsg);
       }
 
-      const payoutId = response.data?.data?.payout_id;
-      const status = mapStatusText(response.data?.data?.status);
-      const bankRef = response.data?.data?.bank_reference_number || undefined;
+      const responseData = response.data?.data || {};
+      const payoutId =
+        responseData.transaction_id ||
+        responseData.transaction_reference_number ||
+        responseData.payout_id;
+      const status = mapStatusText(responseData.status);
+      const bankRef = responseData.bank_reference_number || undefined;
 
       return {
         type: "payout",
@@ -352,35 +376,48 @@ export class SabioPayProvider extends BaseProvider {
 
     const orderId = req.transactionId;
     const hash = buildSortedHash(
-      { api_key: apiKey, order_id: orderId },
+      { api_key: apiKey, merchant_reference_number: orderId },
       apiSalt
     );
 
-    const payload = {
-      api_key: apiKey,
-      order_id: orderId,
-      hash,
-    };
+    const payload = new URLSearchParams();
+    payload.set("api_key", apiKey);
+    payload.set("merchant_reference_number", orderId);
+    if (hash) payload.set("hash", hash);
 
-    const url = `${baseUrl.replace(/\/+$/, "")}/v2/payment/payout/status`;
+    const url = `${baseUrl.replace(/\/+$/, "")}/v3/fundtransferstatus`;
 
     try {
       const response = await this.request<SabioResponse>({
         method: "POST",
         url,
-        data: payload,
-        headers: { "Content-Type": "application/json" },
+        data: payload.toString(),
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         context: {
           action: "payout_status",
           transactionId: req.transactionId,
         },
       });
 
+      if ((response.data as any)?.error) {
+        const errorBlock = (response.data as any)?.error;
+        return {
+          status: "FAILED",
+          message:
+            errorBlock?.message ||
+            (typeof errorBlock === "string" ? errorBlock : null) ||
+            "Status check failed",
+        };
+      }
+
       const status = mapStatusText(response.data?.data?.status);
       return {
         status,
         message: response.data?.message,
-        utr: response.data?.data?.bank_reference_number || undefined,
+        utr:
+          response.data?.data?.bank_reference_number ||
+          response.data?.data?.transaction_id ||
+          undefined,
       };
     } catch (error: any) {
       return {
@@ -396,10 +433,22 @@ export class SabioPayProvider extends BaseProvider {
   ): Promise<ProviderWebhookResult> {
     const payload = parseWebhookBody(input.rawBody || "");
 
-    if (type === "PAYOUT" || payload.payout_id) {
-      const transactionId = payload.order_id || "";
-      const providerTransactionId = payload.payout_id;
-      const amount = payload.amount;
+    const isPayoutWebhook =
+      type === "PAYOUT" ||
+      !!payload.payout_id ||
+      !!payload.merchant_reference_number ||
+      !!payload.transaction_reference_number;
+
+    if (isPayoutWebhook) {
+      const transactionId =
+        payload.merchant_reference_number ||
+        payload.order_id ||
+        "";
+      const providerTransactionId =
+        payload.transaction_reference_number ||
+        payload.payout_id ||
+        payload.transaction_id;
+      const amount = payload.transaction_amount || payload.amount;
       const statusText = payload.status;
       const status = mapStatusText(statusText);
 
@@ -407,12 +456,16 @@ export class SabioPayProvider extends BaseProvider {
         type: "webhook",
         success: status === "SUCCESS",
         status,
-        message: payload.failure_reason || payload.status || "Webhook received",
+        message:
+          payload.error_message ||
+          payload.failure_reason ||
+          payload.status ||
+          "Webhook received",
         providerMsg: payload.status,
         transactionId: transactionId,
         providerTransactionId: providerTransactionId,
         amount: amount ? Number(amount) : undefined,
-        utr: payload.bank_reference_number,
+        utr: payload.bank_reference_number || payload.transaction_id,
       };
     }
 
