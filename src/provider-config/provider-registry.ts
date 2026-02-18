@@ -5,6 +5,7 @@ import { DummyProvider } from "./dummy.provider";
 import { SabioPayProvider } from "./sabiopay.provider";
 import { EaseMyNeedsProvider } from "./easemyneeds.provider";
 import { TpipayProvider } from "./tpipay.provider";
+import { PayprimeProvider } from "./payprime.provider";
 
 type CredentialKeyMap = Record<string, string>;
 
@@ -13,12 +14,14 @@ export const KEY_ALIASES: CredentialKeyMap = {
   apisecret: "apiSecret",
   apisalt: "apiSalt",
   baseurl: "baseUrl",
+  token: "apiToken",
   merchantid: "merchantId",
   clientid: "clientId",
   accesscode: "accessCode",
   workingkey: "workingKey",
   secretkey: "secretKey",
   apitoken: "apiToken",
+  paytype: "payType",
 };
 
 export type ProviderCredentialsSchema = z.ZodObject<Record<string, z.ZodTypeAny>>;
@@ -55,6 +58,12 @@ const TpipayCredentialsSchema = z
   })
   .strict();
 
+const PayprimeCredentialsSchema = z
+  .object({
+    apiToken: z.string().min(1),
+  })
+  .strict();
+
 export const PROVIDER_REGISTRY = {
   dummy: {
     credentialsSchema: DummyCredentialsSchema,
@@ -72,6 +81,10 @@ export const PROVIDER_REGISTRY = {
   tpipay: {
     credentialsSchema: TpipayCredentialsSchema,
     create: (config) => new TpipayProvider(config),
+  },
+  payprime: {
+    credentialsSchema: PayprimeCredentialsSchema,
+    create: (config) => new PayprimeProvider(config),
   },
 
 } satisfies Record<string, ProviderRegistration<Record<string, string>>>;

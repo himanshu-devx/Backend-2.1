@@ -94,6 +94,6 @@ export function getProviderConfig(pleId: string): ProviderConfig {
   }
 
   throw new Error(
-    `No credentials for PLE/Provider ID: ${pleId}. Use PROVIDERID_LEGALENTITY_APIKEY or PROVIDERID_APIKEY.`
+    `No credentials for PLE/Provider ID: ${pleId}. Use PROVIDERID_LEGALENTITY_TOKEN (preferred) or PROVIDERID_TOKEN.`
   );
 }

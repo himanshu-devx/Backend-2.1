@@ -42,6 +42,36 @@ export class WebhookController {
             return c.json({ success: false, error: "Internal processing failure" }, 500);
         }
     }
+
+    /**
+     * Debug Webhook Capture (log only, no storage)
+     * Route: POST /webhook/debug or /webhook/debug/:tag
+     */
+    async handleDebugWebhook(c: Context) {
+        const tag = c.req.param("tag") || "default";
+        const rawBody = await c.req.text();
+        const headers = Object.fromEntries(c.req.raw.headers.entries());
+        const query = c.req.query();
+        const receivedAt = new Date().toISOString();
+
+        logger.info(
+            {
+                tag,
+                receivedAt,
+                headers,
+                query,
+                body: rawBody,
+                bodyLength: rawBody.length,
+            },
+            "[Webhook Debug] Captured webhook"
+        );
+
+        return c.json({
+            success: true,
+            message: "Debug webhook captured",
+            data: { tag, receivedAt },
+        });
+    }
 }
 
 export const webhookController = new WebhookController();

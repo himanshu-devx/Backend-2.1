@@ -5,6 +5,7 @@ import { validateBody } from "@/middlewares/validate";
 import { InitiatePayinSchema } from "@/dto/payment/payin.dto";
 import { PaymentController } from "@/controllers/payment/payment.controller";
 import { InitiatePayoutSchema } from "@/dto/payment/payout.dto";
+import { ProviderProxyController } from "@/controllers/payment/provider-proxy.controller";
 
 const paymentRoutes = new Hono();
 const controller = new PaymentController();
@@ -81,6 +82,11 @@ paymentRoutes.get(
     extractPaymentIp,
     paymentSecurityMiddleware("PAYOUT"),
     (c) => controller.checkPayoutStatusUat(c)
+);
+
+paymentRoutes.post(
+    "/debug/provider-request",
+    (c) => ProviderProxyController.proxy(c)
 );
 
 export default paymentRoutes;

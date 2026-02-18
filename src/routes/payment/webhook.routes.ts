@@ -3,6 +3,10 @@ import { webhookController } from "@/controllers/payment/webhook.controller";
 
 const router = new Hono();
 
+// Debug webhook capture (place before dynamic provider routes)
+router.post("/debug", (c) => webhookController.handleDebugWebhook(c));
+router.post("/debug/:tag", (c) => webhookController.handleDebugWebhook(c));
+
 /**
  * Common webhook route for all providers
  * Example: POST /webhook/payin/provider-a/client-a
