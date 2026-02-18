@@ -1,19 +1,39 @@
-import { TransactionModel, TransactionStatus, TransactionDocument } from "@/models/transaction.model";
+import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { CacheService } from "@/services/common/cache.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
-import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
+import { TransactionOutboxService } from "@/services/payment/transaction-outbox.service";
 import { NotFound } from "@/utils/error";
 import { ProviderClient } from "@/services/provider-config/provider-client.service";
 
 export class StatusSyncWorkflow {
-    async execute(merchantId: string, orderId: string): Promise<TransactionDocument> {
-        // 1. Resolve Transaction
+    async execute(merchantId: string, orderId: string): Promise<any> {
+        const isTerminal = (status?: TransactionStatus) =>
+            status && status !== TransactionStatus.PENDING && status !== TransactionStatus.PROCESSING;
+
+        // 0. Fast path: serve from cache when terminal
+        const cached = await CacheService.getCachedTransactionByOrder(merchantId, orderId);
+        if (cached && isTerminal(cached.status as TransactionStatus)) {
+            return cached;
+        }
+
+        // If cached and still pending, avoid provider stampede
+        let syncLockAcquired = false;
+        if (cached && !isTerminal(cached.status as TransactionStatus)) {
+            syncLockAcquired = await CacheService.acquireStatusSyncLock(merchantId, orderId);
+            if (!syncLockAcquired) {
+                return cached;
+            }
+        }
+
+        // 1. Resolve Transaction (DB fallback)
         const transaction = await TransactionModel.findOne({ orderId, merchantId });
         if (!transaction) throw NotFound("Transaction not found");
+        await CacheService.setTransactionCache(transaction);
 
         // 2. If already success/failed, just return (or optionally re-verify)
-        if (transaction.status !== TransactionStatus.PENDING && transaction.status !== TransactionStatus.PROCESSING) {
+        if (isTerminal(transaction.status)) {
+            await CacheService.setTransactionCache(transaction);
             return transaction;
         }
 
@@ -27,6 +47,14 @@ export class StatusSyncWorkflow {
             ple.providerId,
             ple.legalEntityId
         );
+
+        // Avoid provider stampede across nodes
+        if (!syncLockAcquired) {
+            syncLockAcquired = await CacheService.acquireStatusSyncLock(merchantId, orderId);
+            if (!syncLockAcquired) {
+                return transaction;
+            }
+        }
 
         logger.info(
             {
@@ -67,21 +95,14 @@ export class StatusSyncWorkflow {
                 "[StatusSync] Status updated"
             );
 
-            if (result.status === "SUCCESS") {
-                if (transaction.type === "PAYIN") {
-                    await PaymentLedgerService.processPayinCredit(transaction);
-                } else {
-                    await PaymentLedgerService.commitPayout(transaction);
-                }
-            } else if (result.status === "FAILED") {
-                if (transaction.type === "PAYOUT") {
-                    await PaymentLedgerService.voidPayout(transaction);
-                }
-            }
-
             await transaction.save();
+            await CacheService.setTransactionCache(transaction);
+
+            await TransactionOutboxService.enqueueLedgerAction(transaction);
+            await TransactionOutboxService.enqueueMerchantCallback(transaction);
         }
 
+        await CacheService.setTransactionCache(transaction);
         return transaction;
     }
 }

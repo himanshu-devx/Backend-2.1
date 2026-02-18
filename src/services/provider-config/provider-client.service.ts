@@ -9,6 +9,8 @@ import {
 import { CacheService } from "@/services/common/cache.service";
 import { ProviderFactory } from "@/provider-config/provider-factory";
 import { ENV } from "@/config/env";
+import { Metrics } from "@/infra/metrics";
+import { TimeoutError } from "@/utils/resilience/timeout.util";
 
 type ProviderType = "BANK" | "GATEWAY";
 
@@ -30,8 +32,9 @@ export class ProviderClient {
       openMs: RESILIENCE_DEFAULTS.CIRCUIT_OPEN_MS,
     });
 
+    const start = Date.now();
     try {
-      return await breaker.execute(() =>
+      const result = await breaker.execute(() =>
         retryWithBackoff(
           () => withTimeout(fn(), RESILIENCE_DEFAULTS.PROVIDER_TIMEOUT_MS),
           {
@@ -42,9 +45,21 @@ export class ProviderClient {
           }
         )
       );
+      Metrics.providerCall(action, "success");
+      Metrics.providerCallLatency(action, "success", Date.now() - start);
+      return result;
     } catch (err: any) {
+      const duration = Date.now() - start;
       if (err instanceof CircuitOpenError) {
         logger.warn(`[ProviderClient] Circuit open for ${pleId}:${action}`);
+        Metrics.providerCall(action, "circuit_open");
+        Metrics.providerCallLatency(action, "circuit_open", duration);
+      } else if (err instanceof TimeoutError || err?.code === "ETIMEDOUT") {
+        Metrics.providerCall(action, "timeout");
+        Metrics.providerCallLatency(action, "timeout", duration);
+      } else {
+        Metrics.providerCall(action, "error");
+        Metrics.providerCallLatency(action, "error", duration);
       }
       throw err;
     }

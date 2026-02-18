@@ -3,6 +3,7 @@ import { NotFound } from "@/utils/error";
 import { InitiatePayinDto } from "@/dto/payment/payin.dto";
 import { InitiatePayoutDto } from "@/dto/payment/payout.dto";
 import { mapTransactionAmountsToDisplay } from "@/utils/money.util";
+import { CacheService } from "@/services/common/cache.service";
 import type {
   PayinInitiateResponse,
   PayoutInitiateResponse,
@@ -30,8 +31,6 @@ export class PaymentService {
   }
 
   async getStatus(merchantId: string, orderId: string) {
-    const { StatusSyncWorkflow } = await import("@/workflows/status-sync.workflow");
-    const { CacheService } = await import("@/services/common/cache.service");
     const { TpsService } = await import("@/services/common/tps.service");
     const { ENV } = await import("@/config/env");
 
@@ -41,10 +40,8 @@ export class PaymentService {
       await TpsService.merchant(merchantId, "PAYIN", merchant.payin.tps);
     }
 
-    const workflow = new StatusSyncWorkflow();
-    const result = await workflow.execute(merchantId, orderId);
-    const payload = (result as any)?.toObject ? (result as any).toObject() : result;
-    return mapTransactionAmountsToDisplay(payload);
+    const result = await this.getLocalStatus(merchantId, orderId);
+    return mapTransactionAmountsToDisplay(result);
   }
 
   async getStatusByType(
@@ -52,8 +49,6 @@ export class PaymentService {
     orderId: string,
     type: "PAYIN" | "PAYOUT"
   ) {
-    const { StatusSyncWorkflow } = await import("@/workflows/status-sync.workflow");
-    const { CacheService } = await import("@/services/common/cache.service");
     const { TpsService } = await import("@/services/common/tps.service");
     const { ENV } = await import("@/config/env");
 
@@ -66,10 +61,29 @@ export class PaymentService {
       await TpsService.merchant(merchantId, "PAYOUT", merchant.payout.tps);
     }
 
-    const workflow = new StatusSyncWorkflow();
-    const result = await workflow.execute(merchantId, orderId);
-    const payload = (result as any)?.toObject ? (result as any).toObject() : result;
-    return mapTransactionAmountsToDisplay(payload);
+    const result = await this.getLocalStatus(merchantId, orderId, type);
+    return mapTransactionAmountsToDisplay(result);
+  }
+
+  private async getLocalStatus(
+    merchantId: string,
+    orderId: string,
+    type?: "PAYIN" | "PAYOUT"
+  ) {
+    const cached = await CacheService.getCachedTransactionByOrder(
+      merchantId,
+      orderId
+    );
+    if (cached) {
+      if (!type || cached.type === type) return cached;
+    }
+
+    const transaction = await TransactionModel.findOne({ orderId, merchantId });
+    if (!transaction) throw NotFound("Transaction not found");
+    if (type && transaction.type !== type) throw NotFound("Transaction not found");
+
+    await CacheService.setTransactionCache(transaction);
+    return (transaction as any)?.toObject ? (transaction as any).toObject() : transaction;
   }
 }
 

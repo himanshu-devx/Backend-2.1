@@ -6,6 +6,11 @@ const schema = z.object({
     .default("development"),
   PAYMENT_PORT: z.coerce.number().default(4001),
   LOG_LEVEL: z.string().default("info"),
+  LOG_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1),
+  REDIS_USE_STREAMS: z.preprocess(
+    (v) => (typeof v === "string" ? v === "true" : v),
+    z.boolean().default(false)
+  ),
   SERVICE_NAME: z.string().default("app-service"),
   MONGODB_URI: z.string().startsWith("mongodb"),
   MONGO_DB_NAME: z.string().min(1),
@@ -52,6 +57,13 @@ const schema = z.object({
   RATE_LIMIT_WINDOW: z.coerce.number().default(60),
   SYSTEM_TPS: z.coerce.number().default(100),
   SYSTEM_TPS_WINDOW: z.coerce.number().default(1),
+  ENCRYPT_PII: z.preprocess(
+    (v) => (typeof v === "string" ? v === "true" : v),
+    z.boolean().default(false)
+  ),
+  PAYIN_EXPIRE_MS: z.coerce.number().default(25 * 60 * 1000),
+  PAYOUT_STATUS_POLL_INTERVAL_MS: z.coerce.number().default(5 * 60 * 1000),
+  PAYOUT_STATUS_MAX_POLLS: z.coerce.number().default(6),
 
   // Ledger Cron Jobs
   CRON_LEDGER_SEALER: z.string().default("*/5 * * * * *"),
@@ -74,6 +86,8 @@ export type Env = z.infer<typeof schema>;
 export const ENV: Env = schema.parse({
   NODE_ENV: process.env.NODE_ENV,
   LOG_LEVEL: process.env.LOG_LEVEL,
+  LOG_SAMPLE_RATE: process.env.LOG_SAMPLE_RATE,
+  REDIS_USE_STREAMS: process.env.REDIS_USE_STREAMS,
   SERVICE_NAME: process.env.SERVICE_NAME,
   MONGODB_URI: process.env.MONGODB_URI,
   MONGO_DB_NAME: process.env.MONGO_DB_NAME,
@@ -115,6 +129,10 @@ export const ENV: Env = schema.parse({
   RATE_LIMIT_WINDOW: process.env.RATE_LIMIT_WINDOW,
   SYSTEM_TPS: process.env.SYSTEM_TPS,
   SYSTEM_TPS_WINDOW: process.env.SYSTEM_TPS_WINDOW,
+  ENCRYPT_PII: process.env.ENCRYPT_PII,
+  PAYIN_EXPIRE_MS: process.env.PAYIN_EXPIRE_MS,
+  PAYOUT_STATUS_POLL_INTERVAL_MS: process.env.PAYOUT_STATUS_POLL_INTERVAL_MS,
+  PAYOUT_STATUS_MAX_POLLS: process.env.PAYOUT_STATUS_MAX_POLLS,
   PAYMENT_PORT: process.env.PAYMENT_PORT || 3001,
   APP_BRAND_PREFIX: process.env.APP_BRAND_PREFIX,
 

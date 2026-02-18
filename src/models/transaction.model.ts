@@ -2,6 +2,7 @@ import { mongoose } from "@/infra/mongoose-instance";
 import { Schema, Document, Model } from "mongoose";
 import { generateCustomId } from "@/utils/id.util";
 import { ENV } from "@/config/env";
+import { decryptSecret, encryptSecret, isEncryptedSecret } from "@/utils/secret.util";
 
 import {
   TransactionPartyType,
@@ -96,6 +97,8 @@ export interface TransactionDocument extends Document {
   narration: string;
 }
 
+const MAX_TRANSACTION_EVENTS = 50;
+
 const TransactionSchema = new Schema<TransactionDocument>(
   {
     id: {
@@ -175,14 +178,70 @@ const TransactionSchema = new Schema<TransactionDocument>(
             type: String,
             enum: Object.values(TransactionPartyType),
           },
-          name: String,
-          email: String,
-          phone: String,
-          accountNumber: String,
+          name: {
+            type: String,
+            get: (v: any) => (ENV.ENCRYPT_PII ? decryptSecret(v) ?? v : v),
+            set: (v: any) => {
+              if (!ENV.ENCRYPT_PII) return v;
+              if (!v) return v;
+              return isEncryptedSecret(v) ? v : encryptSecret(String(v));
+            },
+          },
+          email: {
+            type: String,
+            get: (v: any) => (ENV.ENCRYPT_PII ? decryptSecret(v) ?? v : v),
+            set: (v: any) => {
+              if (!ENV.ENCRYPT_PII) return v;
+              if (!v) return v;
+              return isEncryptedSecret(v) ? v : encryptSecret(String(v));
+            },
+          },
+          phone: {
+            type: String,
+            get: (v: any) => (ENV.ENCRYPT_PII ? decryptSecret(v) ?? v : v),
+            set: (v: any) => {
+              if (!ENV.ENCRYPT_PII) return v;
+              if (!v) return v;
+              return isEncryptedSecret(v) ? v : encryptSecret(String(v));
+            },
+          },
+          accountNumber: {
+            type: String,
+            get: (v: any) => (ENV.ENCRYPT_PII ? decryptSecret(v) ?? v : v),
+            set: (v: any) => {
+              if (!ENV.ENCRYPT_PII) return v;
+              if (!v) return v;
+              return isEncryptedSecret(v) ? v : encryptSecret(String(v));
+            },
+          },
           bankName: String,
-          ifscCode: String,
-          upiId: String,
-          bankAccountId: String,
+          ifscCode: {
+            type: String,
+            get: (v: any) => (ENV.ENCRYPT_PII ? decryptSecret(v) ?? v : v),
+            set: (v: any) => {
+              if (!ENV.ENCRYPT_PII) return v;
+              if (!v) return v;
+              return isEncryptedSecret(v) ? v : encryptSecret(String(v));
+            },
+          },
+          upiId: {
+            type: String,
+            get: (v: any) => (ENV.ENCRYPT_PII ? decryptSecret(v) ?? v : v),
+            set: (v: any) => {
+              if (!ENV.ENCRYPT_PII) return v;
+              if (!v) return v;
+              return isEncryptedSecret(v) ? v : encryptSecret(String(v));
+            },
+          },
+          bankAccountId: {
+            type: String,
+            get: (v: any) => (ENV.ENCRYPT_PII ? decryptSecret(v) ?? v : v),
+            set: (v: any) => {
+              if (!ENV.ENCRYPT_PII) return v;
+              if (!v) return v;
+              return isEncryptedSecret(v) ? v : encryptSecret(String(v));
+            },
+          },
         },
         { _id: false }
       ),
@@ -242,14 +301,15 @@ const TransactionSchema = new Schema<TransactionDocument>(
     timestamps: true,
     toJSON: {
       virtuals: true,
+      getters: true,
       transform: function (doc: any, ret: any) {
         delete ret._id;
         delete ret.__v;
       },
     },
-    toObject: { virtuals: true },
+    toObject: { virtuals: true, getters: true },
     id: false,
-  }
+    }
 );
 
 // Virtual for 'narration' (dynamic)
@@ -268,6 +328,8 @@ TransactionSchema.index(
   { unique: true, partialFilterExpression: { providerRef: { $exists: true } } }
 );
 TransactionSchema.index({ createdAt: -1 });
+TransactionSchema.index({ merchantId: 1, orderId: 1 });
+TransactionSchema.index({ merchantId: 1, status: 1, updatedAt: -1 });
 
 // Use pre-validate to ensure ID is set before required check
 TransactionSchema.pre(
@@ -283,6 +345,16 @@ TransactionSchema.pre(
     }
     if (!this.orderId) {
       this.orderId = await generateCustomId("ORD", "order");
+    }
+    next();
+  }
+);
+
+TransactionSchema.pre(
+  "save",
+  function (this: TransactionDocument, next) {
+    if (Array.isArray(this.events) && this.events.length > MAX_TRANSACTION_EVENTS) {
+      this.events = this.events.slice(-MAX_TRANSACTION_EVENTS);
     }
     next();
   }

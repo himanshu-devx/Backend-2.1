@@ -13,8 +13,11 @@ import { PaymentError, PaymentErrorCode, mapToPaymentError } from "@/utils/payme
 import { generateCustomId } from "@/utils/id.util";
 import { ProviderClient } from "@/services/provider-config/provider-client.service";
 import { TpsService } from "@/services/common/tps.service";
-import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { mapFeeDetailToStorage, toDisplayAmount, toStorageAmount } from "@/utils/money.util";
+import { CacheService } from "@/services/common/cache.service";
+import { JobQueue } from "@/utils/job-queue.util";
+import { PAYMENT_TIMEOUTS } from "@/constants/payment-timeouts.constant";
+import { TransactionOutboxService } from "@/services/payment/transaction-outbox.service";
 
 export class PayinWorkflow extends BasePaymentWorkflow<
     InitiatePayinDto,
@@ -129,6 +132,7 @@ export class PayinWorkflow extends BasePaymentWorkflow<
         });
 
         await this.transaction.save();
+        await CacheService.setTransactionCache(this.transaction);
         logger.info(
             {
                 orderId: dto.orderId,
@@ -138,6 +142,25 @@ export class PayinWorkflow extends BasePaymentWorkflow<
             },
             "[PayinWorkflow] Transaction persisted"
         );
+
+        if (this.transaction.status === TransactionStatus.PENDING || this.transaction.status === TransactionStatus.PROCESSING) {
+            await JobQueue.enqueueDelayed(
+                {
+                    id: `payin_expire_${this.transaction.id}`,
+                    type: "PAYIN_EXPIRE",
+                    payload: {
+                        transactionId: this.transaction.id,
+                        merchantId: this.transaction.merchantId,
+                    }
+                },
+                PAYMENT_TIMEOUTS.PAYIN_EXPIRE_MS
+            );
+        }
+
+        if (this.transaction.status === TransactionStatus.SUCCESS || this.transaction.status === TransactionStatus.FAILED) {
+            await TransactionOutboxService.enqueueLedgerAction(this.transaction);
+            await TransactionOutboxService.enqueueMerchantCallback(this.transaction);
+        }
     }
 
     protected async gatewayCall(dto: InitiatePayinDto): Promise<ProviderPayinResult> {
@@ -264,14 +287,12 @@ export class PayinWorkflow extends BasePaymentWorkflow<
 
     protected async postExecute(result: ProviderPayinResult): Promise<void> {
         if (result.success && result.status === 'SUCCESS') {
-            const entryId = await PaymentLedgerService.processPayinCredit(this.transaction);
             logger.info(
                 {
                     orderId: this.transaction.orderId,
-                    transactionId: this.transaction.id,
-                    ledgerEntryId: entryId
+                    transactionId: this.transaction.id
                 },
-                "[PayinWorkflow] Ledger credited"
+                "[PayinWorkflow] Provider returned immediate success"
             );
         }
     }

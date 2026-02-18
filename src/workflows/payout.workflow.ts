@@ -18,6 +18,10 @@ import { TpsService } from "@/services/common/tps.service";
 import { ENV } from "@/config/env";
 import { logger } from "@/infra/logger-instance";
 import { mapFeeDetailToStorage, toStorageAmount } from "@/utils/money.util";
+import { CacheService } from "@/services/common/cache.service";
+import { JobQueue } from "@/utils/job-queue.util";
+import { PAYMENT_TIMEOUTS } from "@/constants/payment-timeouts.constant";
+import { TransactionOutboxService } from "@/services/payment/transaction-outbox.service";
 
 export class PayoutWorkflow extends BasePaymentWorkflow<
     InitiatePayoutDto,
@@ -112,6 +116,7 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
         });
 
         await this.transaction.save();
+        await CacheService.setTransactionCache(this.transaction);
         logger.info(
             {
                 orderId: dto.orderId,
@@ -277,6 +282,7 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
             // Based on requirements: "webhook come if succes then POST ledger".
 
             await this.transaction.save();
+            await CacheService.setTransactionCache(this.transaction);
             logger.info(
                 {
                     orderId: this.transaction.orderId,
@@ -286,6 +292,27 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
                 },
                 "[PayoutWorkflow] Provider initiated"
             );
+
+            if (this.transaction.status === TransactionStatus.PENDING || this.transaction.status === TransactionStatus.PROCESSING) {
+                await JobQueue.enqueueDelayed(
+                    {
+                        id: `payout_poll_${this.transaction.id}_1`,
+                        type: "PAYOUT_STATUS_POLL",
+                        payload: {
+                            transactionId: this.transaction.id,
+                            merchantId: this.transaction.merchantId,
+                            orderId: this.transaction.orderId,
+                            pollCount: 1,
+                        }
+                    },
+                    PAYMENT_TIMEOUTS.PAYOUT_STATUS_POLL_INTERVAL_MS
+                );
+            }
+
+            if (this.transaction.status === TransactionStatus.SUCCESS || this.transaction.status === TransactionStatus.FAILED) {
+                await TransactionOutboxService.enqueueLedgerAction(this.transaction);
+                await TransactionOutboxService.enqueueMerchantCallback(this.transaction);
+            }
         } else {
             throw new Error(result.message || "Provider payout failed");
         }

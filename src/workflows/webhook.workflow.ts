@@ -1,13 +1,10 @@
-import { TransactionModel, TransactionStatus, TransactionDocument } from "@/models/transaction.model";
+import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { ProviderClient } from "@/services/provider-config/provider-client.service";
 import { CacheService } from "@/services/common/cache.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
-import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
-import axios from "axios";
-import crypto from "crypto";
-import { decryptSecret } from "@/utils/secret.util";
-import { toDisplayAmount } from "@/utils/money.util";
+import { TransactionOutboxService } from "@/services/payment/transaction-outbox.service";
+import { Metrics } from "@/infra/metrics";
 
 export class WebhookWorkflow {
     async execute(
@@ -52,6 +49,38 @@ export class WebhookWorkflow {
 
         if (!result.transactionId) throw new Error("No transactionId in webhook");
 
+        // Prevent duplicate in-flight processing
+        const webhookLockRef = result.transactionId || result.providerTransactionId || rawBody.slice(0, 64);
+        if (webhookLockRef) {
+            const acquired = await CacheService.acquireWebhookLock(providerId, webhookLockRef);
+            if (!acquired) {
+                logger.info(
+                    { transactionId: result.transactionId, providerId },
+                    "[WebhookWorkflow] Duplicate webhook in-flight; skipping"
+                );
+                return { transaction: null, alreadyProcessed: true, skipped: true };
+            }
+        }
+
+        // Fast path: if cached terminal (except EXPIRED), skip DB work
+        const cachedById = await CacheService.getCachedTransactionById(result.transactionId);
+        const cachedByRef = !cachedById && result.providerTransactionId
+            ? await CacheService.getCachedTransactionByProviderRef(providerId, result.providerTransactionId)
+            : null;
+        const cachedTxn = cachedById || cachedByRef;
+        if (
+            cachedTxn &&
+            cachedTxn.status !== TransactionStatus.PENDING &&
+            cachedTxn.status !== TransactionStatus.PROCESSING &&
+            cachedTxn.status !== TransactionStatus.EXPIRED
+        ) {
+            logger.info(
+                { transactionId: cachedTxn.id, status: cachedTxn.status },
+                "[WebhookWorkflow] Cached terminal transaction; skipping DB"
+            );
+            return { transaction: cachedTxn, alreadyProcessed: true, cached: true };
+        }
+
         // 3. Persistent Record & Lock
         let transaction = await TransactionModel.findOne({ id: result.transactionId });
         if (!transaction) {
@@ -79,7 +108,16 @@ export class WebhookWorkflow {
             throw new Error(`Txn ${result.transactionId} not found`);
         }
 
-        if (transaction.status !== TransactionStatus.PENDING) {
+        const createdAtMs = transaction.createdAt ? new Date(transaction.createdAt).getTime() : Date.now();
+        const lagMs = Math.max(0, Date.now() - createdAtMs);
+        Metrics.webhookLag(type, lagMs);
+
+        const isProcessable =
+            transaction.status === TransactionStatus.PENDING ||
+            transaction.status === TransactionStatus.PROCESSING ||
+            transaction.status === TransactionStatus.EXPIRED;
+
+        if (!isProcessable) {
             transaction.events.push({
                 type: "WEBHOOK_DUPLICATE",
                 timestamp: getISTDate(),
@@ -90,38 +128,44 @@ export class WebhookWorkflow {
                 { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
                 "[WebhookWorkflow] Transaction already processed"
             );
+            await CacheService.setTransactionCache(transaction);
             return { transaction, alreadyProcessed: true };
         }
 
         // 4. State Update
+        if (transaction.status === TransactionStatus.EXPIRED) {
+            transaction.events.push({
+                type: "WEBHOOK_LATE",
+                timestamp: getISTDate(),
+                payload: { previousStatus: TransactionStatus.EXPIRED }
+            });
+            logger.info(
+                { transactionId: transaction.id, orderId: transaction.orderId },
+                "[WebhookWorkflow] Late webhook received after expiry"
+            );
+        }
+
         transaction.providerRef = result.providerTransactionId || transaction.providerRef;
         transaction.utr = result.utr || transaction.utr;
 
         try {
             if (result.status === "SUCCESS") {
                 transaction.status = TransactionStatus.SUCCESS;
+                transaction.error = undefined;
                 transaction.events.push({ type: "WEBHOOK_SUCCESS", timestamp: getISTDate(), payload: result });
 
-                // Execute Financial Transition
-                if (type === "PAYIN") {
-                    await PaymentLedgerService.processPayinCredit(transaction);
-                } else {
-                    await PaymentLedgerService.commitPayout(transaction);
-                }
             } else if (result.status === "FAILED") {
                 transaction.status = TransactionStatus.FAILED;
                 transaction.error = result.message || "Provider reported failure";
                 transaction.events.push({ type: "WEBHOOK_FAILED", timestamp: getISTDate(), payload: result });
-
-                if (type === "PAYOUT") {
-                    await PaymentLedgerService.voidPayout(transaction);
-                }
             }
 
             await transaction.save();
+            await CacheService.setTransactionCache(transaction);
 
-            // 5. Outbound Notification
-            this.notifyMerchant(transaction);
+            // 5. Outbox Events (Ledger + Callback)
+            await TransactionOutboxService.enqueueLedgerAction(transaction);
+            await TransactionOutboxService.enqueueMerchantCallback(transaction);
 
             logger.info(
                 { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
@@ -145,58 +189,4 @@ export class WebhookWorkflow {
         }
     }
 
-    private async notifyMerchant(transaction: TransactionDocument) {
-        if (!transaction.merchantId) return;
-        const merchant = await CacheService.getMerchant(transaction.merchantId);
-        if (!merchant) return;
-
-        const callbackUrl = transaction.type === "PAYIN" ? merchant.payin.callbackUrl : merchant.payout.callbackUrl;
-        if (!callbackUrl) return;
-
-        const basePayload = {
-            orderId: transaction.orderId,
-            transactionId: transaction.id,
-            amount: toDisplayAmount(transaction.amount),
-            status: transaction.status,
-            utr: transaction.utr,
-            type: transaction.type,
-            timestamp: getISTDate()
-        };
-
-        const apiSecretEncrypted = merchant.apiSecretEncrypted;
-        let payload: any = basePayload;
-        let headers: Record<string, string> = {};
-
-        if (apiSecretEncrypted) {
-            const apiSecret = decryptSecret(apiSecretEncrypted);
-            if (apiSecret) {
-                // Legacy hash in body (amount|currency|orderId|secret)
-                const currency = transaction.currency || "INR";
-                const legacyString = `${basePayload.amount}|${currency}|${transaction.orderId}|${apiSecret}`;
-                const legacyHash = crypto.createHmac("sha256", apiSecret).update(legacyString).digest("hex");
-                payload = { ...basePayload, currency, hash: legacyHash };
-
-                // Signature header over raw body + timestamp
-                const timestamp = Date.now().toString();
-                const rawBody = JSON.stringify(payload);
-                const signature = crypto
-                    .createHmac("sha256", apiSecret)
-                    .update(`${rawBody}|${timestamp}`)
-                    .digest("hex");
-
-                headers = {
-                    "Content-Type": "application/json",
-                    "x-merchant-id": merchant.id,
-                    "x-timestamp": timestamp,
-                    "x-signature": signature,
-                };
-            } else {
-                logger.warn(`[Callback] Merchant ${merchant.id} secret decryption failed; sending unsigned callback`);
-            }
-        }
-
-        axios.post(callbackUrl, payload, { timeout: 5000, headers }).catch(err => {
-            logger.warn(`[Callback] Failed for ${transaction.id}: ${err.message}`);
-        });
-    }
 }

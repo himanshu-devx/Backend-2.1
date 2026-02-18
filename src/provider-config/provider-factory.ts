@@ -9,6 +9,8 @@ import type { ProviderConfig } from "./types";
  * Instantiates the appropriate provider based on PLE ID
  */
 export class ProviderFactory {
+  private static instanceCache = new Map<string, BaseProvider>();
+
   private static toId(value: string): string {
     return value
       .toLowerCase()
@@ -46,6 +48,9 @@ export class ProviderFactory {
    * @throws Error if provider not supported or not found
    */
   static getProvider(pleId: string): BaseProvider {
+    const cached = this.instanceCache.get(pleId);
+    if (cached) return cached;
+
     let config: ProviderConfig;
     try {
       config = getProviderConfig(pleId);
@@ -73,6 +78,8 @@ export class ProviderFactory {
       throw new Error(`Unsupported provider: ${config.providerId}`);
     }
 
-    return registration.create(config as any);
+    const instance = registration.create(config as any);
+    this.instanceCache.set(pleId, instance);
+    return instance;
   }
 }

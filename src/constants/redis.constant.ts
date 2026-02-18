@@ -33,4 +33,15 @@ export const RedisKeys = {
   },
   CHANNEL: (providerId: string, legalEntityId: string) =>
     `channel:${providerId}:${legalEntityId}`,
+  TRANSACTION: {
+    BY_ID: (id: string) => `txn:id:${id}`,
+    BY_ORDER: (merchantId: string, orderId: string) =>
+      `txn:order:${merchantId}:${orderId}`,
+    BY_PROVIDER_REF: (providerId: string, providerRef: string) =>
+      `txn:pref:${providerId}:${providerRef}`,
+    STATUS_SYNC_LOCK: (merchantId: string, orderId: string) =>
+      `txn:status-lock:${merchantId}:${orderId}`,
+    WEBHOOK_LOCK: (providerId: string, ref: string) =>
+      `txn:webhook-lock:${providerId}:${ref}`,
+  },
 } as const;

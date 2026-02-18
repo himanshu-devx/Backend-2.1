@@ -12,6 +12,8 @@ services:
     environment:
       - PGSSLMODE=require
       - SERVICE=instances/api
+      - SERVICE_NAME=api
+      - NODE_ENV=production
     ports:
       - "4000:4000"
     restart: always
@@ -23,6 +25,8 @@ services:
     environment:
       - PGSSLMODE=require
       - SERVICE=instances/payment
+      - SERVICE_NAME=payment
+      - NODE_ENV=production
     ports:
       - "4001:4001"
     restart: always
@@ -34,6 +38,8 @@ services:
     environment:
       - PGSSLMODE=require
       - SERVICE=instances/worker
+      - SERVICE_NAME=worker
+      - NODE_ENV=production
     restart: always
 
   caddy:

@@ -189,6 +189,11 @@ export const paymentSecurityMiddleware = (
 
     // Attach context
     c.set("merchant", merchant);
+    c.set("merchantId", merchantId);
+    const reqLogger = c.get("logger");
+    if (reqLogger && typeof reqLogger.child === "function") {
+        c.set("logger", reqLogger.child({ merchantId }));
+    }
     c.set("req_body", body);
 
     await next();

@@ -12,6 +12,9 @@ export class PaymentLedgerService {
      * Triggered via Webhook
      */
     static async processPayinCredit(transaction: TransactionDocument) {
+        const existingEntryId = transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
+        if (existingEntryId) return existingEntryId;
+
         const merchantPayinAccountId = LedgerUtils.generateAccountId(
             ENTITY_TYPE.MERCHANT,
             transaction.merchantId as string,
@@ -118,13 +121,20 @@ export class PaymentLedgerService {
      * Commit Payout: Mark PENDING entry as POSTED
      */
     static async commitPayout(transaction: TransactionDocument) {
+        const alreadyExecuted =
+            transaction.meta?.get("ledgerExecuted") ||
+            transaction.meta?.get("ledgerExectued") ||
+            (transaction.meta as any)?.ledgerExecuted;
+        if (alreadyExecuted) {
+            return transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
+        }
         const entryId = transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
         if (!entryId) return; // No pending entry to commit
 
         await LedgerService.post(entryId);
 
         if (transaction?.meta?.set) {
-            transaction.meta.set("ledgerExectued", true);
+            transaction.meta.set("ledgerExecuted", true);
         } else if (transaction?.meta) {
             (transaction.meta as any).ledgerExecuted = true;
         }
@@ -136,6 +146,10 @@ export class PaymentLedgerService {
      * Void Payout: Mark PENDING entry as VOID (Releasing funds)
      */
     static async voidPayout(transaction: TransactionDocument) {
+        const alreadyVoided = transaction.meta?.get("ledgerVoided") || (transaction.meta as any)?.ledgerVoided;
+        if (alreadyVoided) {
+            return transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
+        }
         const entryId = transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
         if (!entryId) return; // No pending entry to void
 
