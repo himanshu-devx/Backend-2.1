@@ -45,6 +45,38 @@ export class JobQueue {
     }
 
     /**
+     * Push a task to the delayed queue
+     */
+    static async enqueueDelayed(
+        task: Omit<JobTask, "receivedAt" | "id"> & { id?: string },
+        delayMs: number
+    ) {
+        if (!delayMs || delayMs <= 0) {
+            return this.enqueue(task);
+        }
+
+        try {
+            const fullTask: JobTask = {
+                id: task.id || `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                ...task,
+                receivedAt: new Date(),
+                attempt: task.attempt ?? 0,
+                maxAttempts: task.maxAttempts ?? WEBHOOK_RETRY_DEFAULTS.MAX_ATTEMPTS
+            };
+            const runAt = Date.now() + delayMs;
+            await redis.zadd(JOB_DELAYED_KEY, runAt, JSON.stringify(fullTask));
+            logger.info(
+                { jobId: fullTask.id, jobType: fullTask.type, delayMs },
+                "[JobQueue] Enqueued delayed job"
+            );
+            return fullTask.id;
+        } catch (error: any) {
+            logger.error(`[JobQueue] Failed to enqueue delayed job: ${error.message}`);
+            throw error;
+        }
+    }
+
+    /**
      * Pull the next task from the queue (Blocking)
      */
     static async dequeue(timeout: number = 0): Promise<JobTask | null> {

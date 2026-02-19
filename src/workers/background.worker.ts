@@ -3,6 +3,7 @@ import { WebhookQueue, WebhookTask } from "@/utils/webhook-queue.util";
 import { logger } from "@/infra/logger-instance";
 import { ProviderFeeSettlementService } from "@/services/provider-fee-settlement/provider-fee-settlement.service";
 import { WebhookWorkflow } from "@/workflows/webhook.workflow";
+import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
 
 export class BackgroundWorker {
     private static isRunning = true;
@@ -67,6 +68,16 @@ export class BackgroundWorker {
                     await ProviderFeeSettlementService.processPLESettlement(
                         task.payload.pleId,
                         task.payload.targetDate
+                    );
+                    break;
+                case "PAYIN_AUTO_EXPIRE":
+                    await TransactionMonitorService.processPayinAutoExpire(
+                        task.payload.transactionId
+                    );
+                    break;
+                case "PAYOUT_STATUS_POLL":
+                    await TransactionMonitorService.processPayoutStatusPoll(
+                        task.payload
                     );
                     break;
                 case "SETTLEMENT_VERIFICATION":

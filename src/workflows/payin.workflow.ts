@@ -15,6 +15,7 @@ import { ProviderClient } from "@/services/provider-config/provider-client.servi
 import { TpsService } from "@/services/common/tps.service";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { mapFeeDetailToStorage, toDisplayAmount, toStorageAmount } from "@/utils/money.util";
+import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
 
 export class PayinWorkflow extends BasePaymentWorkflow<
     InitiatePayinDto,
@@ -272,7 +273,11 @@ export class PayinWorkflow extends BasePaymentWorkflow<
                     ledgerEntryId: entryId
                 },
                 "[PayinWorkflow] Ledger credited"
-            );
+                );
+        }
+
+        if (this.transaction?.status === TransactionStatus.PENDING) {
+            await TransactionMonitorService.schedulePayinExpiry(this.transaction.id);
         }
     }
 

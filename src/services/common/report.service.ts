@@ -9,6 +9,7 @@ import { getISTDate, getShiftedISTDate } from "@/utils/date.util";
 import { ENV } from "@/config/env";
 import { Logger } from "pino";
 import { emailTemplates, EmailTemplate } from "@/infra/email/templates";
+import { MerchantModel } from "@/models/merchant.model";
 
 export interface ReportRequest {
     type: ReportType;
@@ -62,15 +63,79 @@ export class ReportService {
 
             if (report.type === ReportType.TRANSACTIONS) {
                 // Highly Optimized Fetching: Projection + Proper Limit
+                const isAdmin = report.ownerType === "ADMIN";
+                const baseFields = ["id", "createdAt", "amount", "currency", "type", "status", "orderId", "utr"];
+                const adminQueryFields = [
+                    "merchantId",
+                    "providerId",
+                    "legalEntityId",
+                    "providerLegalEntityId",
+                    "netAmount",
+                    "providerRef",
+                    "paymentMode",
+                    "remarks",
+                    "isBackDated",
+                    "insertedDate",
+                    "fees.merchantFees.total",
+                    "fees.providerFees.total",
+                    "party.name"
+                ];
+                const listFields = isAdmin ? [...baseFields, ...adminQueryFields] : baseFields;
+                const headers = isAdmin
+                    ? [
+                        ...baseFields,
+                        "merchantId",
+                        "merchantName",
+                        "providerId",
+                        "legalEntityId",
+                        "providerLegalEntityId",
+                        "netAmount",
+                        "providerRef",
+                        "paymentMode",
+                        "remarks",
+                        "isBackDated",
+                        "insertedDate",
+                        "fees.merchantFees.total",
+                        "fees.providerFees.total",
+                        "party.name"
+                    ]
+                    : baseFields;
+
                 const result = await TransactionService.list({
                     ...filters,
                     limit: this.MAX_REPORT_RECORDS,
-                    fields: "id,createdAt,amount,currency,type,status,orderId,utr"
+                    fields: listFields.join(",")
                 } as any);
 
                 if (result.ok) {
-                    const headers = ["id", "createdAt", "amount", "currency", "type", "status", "orderId", "utr"];
-                    csvContent = this.convertToCsv(result.value.data, headers);
+                    let data = result.value.data;
+                    if (isAdmin) {
+                        const merchantIds = [
+                            ...new Set(
+                                data
+                                    .map((txn: any) => txn?.merchantId)
+                                    .filter(Boolean)
+                            ),
+                        ];
+
+                        if (merchantIds.length > 0) {
+                            const merchants = await MerchantModel.find({ id: { $in: merchantIds } })
+                                .select("id displayName name")
+                                .lean();
+                            const merchantNameMap = new Map<string, string>();
+                            merchants.forEach((m: any) => {
+                                merchantNameMap.set(m.id, m.displayName || m.name || "");
+                            });
+                            data = data.map((txn: any) => ({
+                                ...txn,
+                                merchantName: merchantNameMap.get(txn.merchantId) || ""
+                            }));
+                        } else {
+                            data = data.map((txn: any) => ({ ...txn, merchantName: "" }));
+                        }
+                    }
+
+                    csvContent = this.convertToCsv(data, headers);
                 }
             } else if (report.type === ReportType.LEDGER_STATEMENT) {
                 const result = await LedgerEntryService.getAccountStatement(filters.accountId, {
@@ -187,13 +252,23 @@ export class ReportService {
         const headerRow = headers.join(",");
         const rows = data.map(item => {
             return headers.map(header => {
-                let val = item[header];
+                const getNestedValue = (obj: any, path: string) => {
+                    return path.split(".").reduce((acc: any, key) => {
+                        if (acc === null || acc === undefined) return undefined;
+                        return acc[key];
+                    }, obj);
+                };
+
+                let val = header.includes(".") ? getNestedValue(item, header) : item[header];
                 if (val === null || val === undefined) return "";
 
                 // Format dates as ISO strings (now already shifted to IST by services)
                 if (val instanceof Date) {
                     val = val.toISOString().replace('T', ' ').split('.')[0];
-                } else if (typeof val === 'string' && (header === 'createdAt' || header === 'date' || header === 'postedAt')) {
+                } else if (
+                    typeof val === 'string' &&
+                    (header === 'createdAt' || header === 'date' || header === 'postedAt' || header === 'insertedDate' || header === 'updatedAt')
+                ) {
                     const d = new Date(val);
                     if (!isNaN(d.getTime())) {
                         val = d.toISOString().replace('T', ' ').split('.')[0];

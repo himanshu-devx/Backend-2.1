@@ -230,10 +230,10 @@ export const PAYMENT_ERROR_CATALOG: Record<PaymentErrorCode, PaymentErrorDetail>
     // Ledger Errors
     [PaymentErrorCode.LEDGER_HOLD_FAILED]: {
         code: PaymentErrorCode.LEDGER_HOLD_FAILED,
-        message: "Failed to hold funds",
-        description: "Unable to place a hold on the funds in the ledger",
+        message: "Unable to reserve funds",
+        description: "Unable to reserve funds for this payout transaction",
         httpStatus: 500,
-        retryable: true
+        retryable: false
     },
     [PaymentErrorCode.LEDGER_COMMIT_FAILED]: {
         code: PaymentErrorCode.LEDGER_COMMIT_FAILED,

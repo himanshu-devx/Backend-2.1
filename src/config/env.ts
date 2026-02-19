@@ -65,6 +65,7 @@ const schema = z.object({
   REPORT_EMAIL_STATEMENT_ENABLED: z.preprocess((v) => (typeof v === "string" ? v === "true" : v), z.boolean().default(true)),
   REPORT_STORAGE_DIR: z.string().default("/data/reports"),
   AMOUNT_UNIT: z.enum(["PAISE", "RUPEES"]).default("RUPEES"),
+  PAYIN_AUTO_EXPIRE_MINUTES: z.coerce.number().default(30),
 
 
 });
@@ -130,5 +131,6 @@ export const ENV: Env = schema.parse({
   REPORT_EMAIL_STATEMENT_ENABLED: process.env.REPORT_EMAIL_STATEMENT_ENABLED,
   REPORT_STORAGE_DIR: process.env.REPORT_STORAGE_DIR,
   AMOUNT_UNIT: process.env.AMOUNT_UNIT,
+  PAYIN_AUTO_EXPIRE_MINUTES: process.env.PAYIN_AUTO_EXPIRE_MINUTES,
 
 });

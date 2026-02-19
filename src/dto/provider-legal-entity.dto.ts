@@ -24,6 +24,7 @@ export const UpdateProviderServiceConfigSchema = z.object({
   isActive: z.boolean().optional(),
   tps: z.number().min(1).optional(),
   dailyLimit: z.number().min(0).optional(),
+  pollImmediately: z.boolean().optional(),
   accounts: z
     .object({
       collectionEscrowId: z.string().optional(),

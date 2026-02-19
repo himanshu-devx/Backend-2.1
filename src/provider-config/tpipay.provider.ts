@@ -185,7 +185,7 @@ export class TpipayProvider extends BaseProvider {
     };
 
     if (req.callbackUrl) {
-      payload.callback_url = req.callbackUrl;
+      // payload.callback_url
     }
 
     const url = buildUrl(baseUrl, "/createorder");

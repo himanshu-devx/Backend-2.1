@@ -13,11 +13,13 @@ import type {
 } from "./types";
 
 type PayprimePayoutResponse = {
+  code?: number;
   status?: boolean | string | number;
   order_id?: string;
   orderId?: string;
   txn_status?: string;
   message?: string;
+  utr?: string;
   data?: {
     status?: number | boolean | string;
     message?: string;
@@ -25,15 +27,24 @@ type PayprimePayoutResponse = {
       orderId?: string;
       order_id?: string;
       status?: string;
+      txn_status?: string;
       message?: string;
       amount?: number | string;
+      utr?: string;
+      transactionId?: string;
+      transaction_id?: string;
     };
     amount?: number | string;
     order_id?: string;
     orderId?: string;
     txn_status?: string;
+    utr?: string;
+    transactionId?: string;
+    transaction_id?: string;
   };
   amount?: number | string;
+  transactionId?: string;
+  transaction_id?: string;
 };
 
 type PayprimeWebhookPayload = Record<string, any>;
@@ -258,10 +269,116 @@ export class PayprimeProvider extends BaseProvider {
   }
 
   async checkPayoutStatus(_req: StatusRequest): Promise<ProviderStatusResult> {
-    return {
-      status: "PENDING",
-      message: "Status check not supported for Payprime",
+    const creds = this.config.credentials || {};
+    const apiToken = creds.apiToken;
+    const baseUrl = creds.baseUrl || DEFAULT_BASE_URL;
+
+    if (!apiToken) {
+      return {
+        status: "PENDING",
+        message: "Payprime credentials missing: apiToken",
+      };
+    }
+
+    const orderId = resolveString(_req.providerTransactionId, _req.transactionId);
+    if (!orderId) {
+      return {
+        status: "PENDING",
+        message: "Payprime status check missing order_id",
+      };
+    }
+
+    const payload = {
+      token: apiToken,
+      order_id: orderId,
     };
+
+    const url = buildUrl(baseUrl, "/check-status");
+
+    try {
+      const response = await this.request<PayprimePayoutResponse>({
+        method: "GET",
+        url,
+        data: payload,
+        headers: { "Content-Type": "application/json" },
+        context: {
+          action: "payout_status",
+          transactionId: _req.transactionId,
+        },
+      });
+
+      const resp = response.data || {};
+      const data = resp.data || {};
+      const inner = data.data || {};
+
+      if (resp.code && resp.code !== 200) {
+        return {
+          status: "PENDING",
+          message: resp.message || "Payprime status not available",
+        };
+      }
+
+      const statusText = resolveString(
+        resp.txn_status,
+        data.txn_status,
+        inner.txn_status,
+        inner.status,
+        data.status,
+        typeof resp.status === "string" ? resp.status : undefined,
+        typeof data.status === "string" ? data.status : undefined
+      );
+      const normalizedStatus = mapPayprimeStatus(statusText);
+
+      const statusFlag =
+        typeof resp.status === "boolean"
+          ? resp.status
+          : typeof data.status === "boolean"
+            ? data.status
+            : undefined;
+
+      const message =
+        resolveString(resp.message, data.message, inner.message) ||
+        "Payprime payout status";
+
+      const utr = resolveString(
+        resp.utr,
+        data.utr,
+        inner.utr,
+        resp.transactionId,
+        resp.transaction_id,
+        data.transactionId,
+        data.transaction_id,
+        inner.transactionId,
+        inner.transaction_id
+      );
+
+      if (statusFlag === false) {
+        return {
+          status: "FAILED",
+          message,
+          utr,
+        };
+      }
+
+      return {
+        status: normalizedStatus,
+        message,
+        utr,
+      };
+    } catch (error: any) {
+      logger.error(
+        {
+          providerId: this.providerId,
+          transactionId: _req.transactionId,
+          error: error?.message,
+        },
+        "[Payprime] Payout status check failed"
+      );
+      return {
+        status: "PENDING",
+        message: error?.message || "Payprime status check failed",
+      };
+    }
   }
 
   async handleWebhook(

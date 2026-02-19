@@ -124,6 +124,7 @@ export interface UpdateProviderConfigDTO {
   tps?: number;
   dailyLimit?: number;
   fees?: FeeTier[];
+  pollImmediately?: boolean;
 }
 
 export class ProviderLegalEntityService {

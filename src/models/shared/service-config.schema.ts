@@ -27,6 +27,7 @@ export interface SharedServiceConfig {
 
   configType?: "PAYIN" | "PAYOUT";
   callbackUrl?: string;
+  pollImmediately?: boolean;
 
   routing?: {
     providerId: string;
@@ -87,6 +88,7 @@ export const SharedServiceConfigSchema = new Schema(
       enum: ["PAYIN", "PAYOUT"],
     },
     callbackUrl: { type: String, trim: true },
+    pollImmediately: { type: Boolean, default: false },
     routing: {
       providerId: { type: String },
       legalEntityId: { type: String },

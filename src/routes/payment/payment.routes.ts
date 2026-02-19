@@ -6,6 +6,10 @@ import { InitiatePayinSchema } from "@/dto/payment/payin.dto";
 import { PaymentController } from "@/controllers/payment/payment.controller";
 import { InitiatePayoutSchema } from "@/dto/payment/payout.dto";
 import { ProviderProxyController } from "@/controllers/payment/provider-proxy.controller";
+import { ManualStatusUpdateSchema } from "@/dto/payment/manual-status.dto";
+import { ManualStatusSyncSchema } from "@/dto/payment/manual-status-sync.dto";
+import { ManualExpirePendingSchema } from "@/dto/payment/manual-expire.dto";
+import { ManualProviderFeeSettlementSchema } from "@/dto/payment/manual-provider-fee.dto";
 
 const paymentRoutes = new Hono();
 const controller = new PaymentController();
@@ -87,6 +91,34 @@ paymentRoutes.get(
 paymentRoutes.post(
     "/debug/provider-request",
     (c) => ProviderProxyController.proxy(c)
+);
+
+paymentRoutes.post(
+    "/manual/status/update",
+    extractPaymentIp,
+    validateBody(ManualStatusUpdateSchema),
+    (c) => controller.manualStatusUpdate(c)
+);
+
+paymentRoutes.post(
+    "/manual/status/sync",
+    extractPaymentIp,
+    validateBody(ManualStatusSyncSchema),
+    (c) => controller.manualStatusSync(c)
+);
+
+paymentRoutes.post(
+    "/manual/expire/pending-previous-day",
+    extractPaymentIp,
+    validateBody(ManualExpirePendingSchema),
+    (c) => controller.manualExpirePendingPreviousDay(c)
+);
+
+paymentRoutes.post(
+    "/manual/provider-fee-settlement",
+    extractPaymentIp,
+    validateBody(ManualProviderFeeSettlementSchema),
+    (c) => controller.manualProviderFeeSettlement(c)
 );
 
 export default paymentRoutes;

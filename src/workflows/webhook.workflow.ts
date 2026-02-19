@@ -1,13 +1,11 @@
-import { TransactionModel, TransactionStatus, TransactionDocument } from "@/models/transaction.model";
+import { TransactionModel, TransactionStatus } from "@/models/transaction.model";
 import { ProviderClient } from "@/services/provider-config/provider-client.service";
 import { CacheService } from "@/services/common/cache.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
-import axios from "axios";
-import crypto from "crypto";
-import { decryptSecret } from "@/utils/secret.util";
-import { toDisplayAmount } from "@/utils/money.util";
+import { MerchantCallbackService } from "@/services/payment/merchant-callback.service";
+import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
 
 export class WebhookWorkflow {
     async execute(
@@ -86,6 +84,9 @@ export class WebhookWorkflow {
                 payload: result
             });
             await transaction.save();
+            if (type === "PAYOUT") {
+                await TransactionMonitorService.stopPayoutPolling(transaction.id);
+            }
             logger.info(
                 { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
                 "[WebhookWorkflow] Transaction already processed"
@@ -121,7 +122,10 @@ export class WebhookWorkflow {
             await transaction.save();
 
             // 5. Outbound Notification
-            this.notifyMerchant(transaction);
+            MerchantCallbackService.notify(transaction);
+            if (type === "PAYOUT") {
+                await TransactionMonitorService.stopPayoutPolling(transaction.id);
+            }
 
             logger.info(
                 { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
@@ -145,58 +149,4 @@ export class WebhookWorkflow {
         }
     }
 
-    private async notifyMerchant(transaction: TransactionDocument) {
-        if (!transaction.merchantId) return;
-        const merchant = await CacheService.getMerchant(transaction.merchantId);
-        if (!merchant) return;
-
-        const callbackUrl = transaction.type === "PAYIN" ? merchant.payin.callbackUrl : merchant.payout.callbackUrl;
-        if (!callbackUrl) return;
-
-        const basePayload = {
-            orderId: transaction.orderId,
-            transactionId: transaction.id,
-            amount: toDisplayAmount(transaction.amount),
-            status: transaction.status,
-            utr: transaction.utr,
-            type: transaction.type,
-            timestamp: getISTDate()
-        };
-
-        const apiSecretEncrypted = merchant.apiSecretEncrypted;
-        let payload: any = basePayload;
-        let headers: Record<string, string> = {};
-
-        if (apiSecretEncrypted) {
-            const apiSecret = decryptSecret(apiSecretEncrypted);
-            if (apiSecret) {
-                // Legacy hash in body (amount|currency|orderId|secret)
-                const currency = transaction.currency || "INR";
-                const legacyString = `${basePayload.amount}|${currency}|${transaction.orderId}|${apiSecret}`;
-                const legacyHash = crypto.createHmac("sha256", apiSecret).update(legacyString).digest("hex");
-                payload = { ...basePayload, currency, hash: legacyHash };
-
-                // Signature header over raw body + timestamp
-                const timestamp = Date.now().toString();
-                const rawBody = JSON.stringify(payload);
-                const signature = crypto
-                    .createHmac("sha256", apiSecret)
-                    .update(`${rawBody}|${timestamp}`)
-                    .digest("hex");
-
-                headers = {
-                    "Content-Type": "application/json",
-                    "x-merchant-id": merchant.id,
-                    "x-timestamp": timestamp,
-                    "x-signature": signature,
-                };
-            } else {
-                logger.warn(`[Callback] Merchant ${merchant.id} secret decryption failed; sending unsigned callback`);
-            }
-        }
-
-        axios.post(callbackUrl, payload, { timeout: 5000, headers }).catch(err => {
-            logger.warn(`[Callback] Failed for ${transaction.id}: ${err.message}`);
-        });
-    }
 }

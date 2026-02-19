@@ -359,4 +359,184 @@ export class PaymentController {
       throw InternalError("Status check failed: " + msg);
     }
   }
+
+  async manualStatusUpdate(c: Context) {
+    let body: any;
+    const ip = c.get("requestIp");
+
+    try {
+      body = c.get("req_body") || await c.req.json();
+      const adminEmail = c.req.header("x-admin-email");
+      if (!adminEmail) throw BadRequest("Admin email header missing");
+
+      const result = await this.service.manualStatusUpdate(body, adminEmail);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      const logMerchantId = c.req.header("x-admin-email") || "UNKNOWN";
+      await AuditService.record({
+        action: "MANUAL_STATUS_UPDATE",
+        actorType: "ADMIN",
+        actorId: logMerchantId,
+        entityType: "TRANSACTION",
+        entityId: body?.orderId,
+        ipAddress: ip,
+        metadata: {
+          adminEmail: c.req.header("x-admin-email"),
+          orderId: body?.orderId,
+          status: body?.status,
+          utr: body?.utr,
+          providerTransactionId: body?.providerTransactionId,
+          providerMsg: body?.providerMsg,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
+
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus as any || 400);
+      }
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+
+      console.error("Manual Status Update Error:", error);
+      throw InternalError(error.message || "Manual status update failed.");
+    }
+  }
+
+  async manualStatusSync(c: Context) {
+    let body: any;
+    const ip = c.get("requestIp");
+
+    try {
+      body = c.get("req_body") || await c.req.json();
+      const adminEmail = c.req.header("x-admin-email");
+      if (!adminEmail) throw BadRequest("Admin email header missing");
+
+      const result = await this.service.manualStatusSync(body, adminEmail);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      const logMerchantId = c.req.header("x-admin-email") || "UNKNOWN";
+      await AuditService.record({
+        action: "MANUAL_STATUS_SYNC",
+        actorType: "ADMIN",
+        actorId: logMerchantId,
+        entityType: "TRANSACTION",
+        entityId: body?.transactionId,
+        ipAddress: ip,
+        metadata: {
+          adminEmail: c.req.header("x-admin-email"),
+          transactionId: body?.transactionId,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
+
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus as any || 400);
+      }
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+
+      console.error("Manual Status Sync Error:", error);
+      throw InternalError(error.message || "Manual status sync failed.");
+    }
+  }
+
+  async manualExpirePendingPreviousDay(c: Context) {
+    let body: any;
+    const ip = c.get("requestIp");
+
+    try {
+      body = c.get("req_body") || await c.req.json();
+      const adminEmail = c.req.header("x-admin-email");
+      if (!adminEmail) throw BadRequest("Admin email header missing");
+
+      const result = await this.service.manualExpirePendingPreviousDay(body, adminEmail);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      const logAdmin = c.req.header("x-admin-email") || "UNKNOWN";
+      await AuditService.record({
+        action: "MANUAL_EXPIRE_PENDING_PREVIOUS_DAY",
+        actorType: "ADMIN",
+        actorId: logAdmin,
+        entityType: "TRANSACTION",
+        entityId: body?.date || "previous-day",
+        ipAddress: ip,
+        metadata: {
+          adminEmail: c.req.header("x-admin-email"),
+          reason: body?.reason,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
+
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus as any || 400);
+      }
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+
+      console.error("Manual Expire Pending Error:", error);
+      throw InternalError(error.message || "Manual expire pending failed.");
+    }
+  }
+
+  async manualProviderFeeSettlement(c: Context) {
+    let body: any;
+    const ip = c.get("requestIp");
+
+    try {
+      body = c.get("req_body") || await c.req.json();
+      const adminEmail = c.req.header("x-admin-email");
+      if (!adminEmail) throw BadRequest("Admin email header missing");
+
+      const result = await this.service.manualProviderFeeSettlement(body, adminEmail);
+      return c.json({ success: true, data: result });
+    } catch (error: any) {
+      const logAdmin = c.req.header("x-admin-email") || "UNKNOWN";
+      await AuditService.record({
+        action: "MANUAL_PROVIDER_FEE_SETTLEMENT",
+        actorType: "ADMIN",
+        actorId: logAdmin,
+        entityType: "PROVIDER_FEE_SETTLEMENT",
+        entityId: body?.date || "previous-day",
+        ipAddress: ip,
+        metadata: {
+          adminEmail: c.req.header("x-admin-email"),
+          date: body?.date,
+          error: error instanceof PaymentError ? error.toJSON() : {
+            message: error?.message,
+            name: error?.name,
+            stack: error?.stack,
+          },
+        },
+      });
+
+      if (error instanceof PaymentError || error?.name === "PaymentError") {
+        const payload = (error as PaymentError).toMerchantJSON();
+        return c.json({ success: false, ...payload }, (error as PaymentError).httpStatus as any || 400);
+      }
+      if (error instanceof AppError || error.name === "AppError") {
+        throw error;
+      }
+
+      console.error("Manual Provider Fee Settlement Error:", error);
+      throw InternalError(error.message || "Manual provider fee settlement failed.");
+    }
+  }
 }

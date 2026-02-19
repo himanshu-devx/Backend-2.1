@@ -299,20 +299,17 @@ export class LedgerOperationService {
       };
       to = { accountId: ple.expenseAccountId };
     } else if (op === LEDGER_OPERATION.PLE_EXPENSE_CHARGE) {
-      // OLD: from Payin -> to Expense
-      // NEW: from Expense -> to Payin (Reversed)
-      from = { accountId: ple.expenseAccountId };
-      to = { accountId: ple.payinAccountId };
+      // WORLD -> Provider EXPENSE (increase expense)
+      from = { world: true };
+      to = { accountId: ple.expenseAccountId };
     } else if (op === LEDGER_OPERATION.PLE_PAYIN_FEE_CHARGE) {
-      // OLD: from Payin -> to Expense
-      // NEW: from Expense -> to Payin (Reversed)
-      from = { accountId: ple.expenseAccountId };
-      to = { accountId: ple.payinAccountId };
+      // Provider PAYIN -> Provider EXPENSE (daily payin fees)
+      from = { accountId: ple.payinAccountId };
+      to = { accountId: ple.expenseAccountId };
     } else if (op === LEDGER_OPERATION.PLE_PAYOUT_FEE_CHARGE) {
-      // OLD: from Payout -> to Expense
-      // NEW: from Expense -> to Payout (Reversed)
-      from = { accountId: ple.expenseAccountId };
-      to = { accountId: ple.payoutAccountId };
+      // Provider PAYOUT -> Provider EXPENSE (daily payout fees)
+      from = { accountId: ple.payoutAccountId };
+      to = { accountId: ple.expenseAccountId };
     } else if (op === LEDGER_OPERATION.LEGAL_ENTITY_DEDUCT) {
       if (!leid) throw BadRequest("legalEntityId is required");
       // OLD: from LE Bank -> to World

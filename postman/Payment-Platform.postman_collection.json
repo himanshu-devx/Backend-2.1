@@ -2107,6 +2107,90 @@
             ],
             "url": "{{payment_url}}/api/payment/payout/status/{{order_id}}"
           }
+        },
+        {
+          "name": "Manual Status Update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-email",
+                "value": "{{admin_email}}"
+              }
+            ],
+            "url": "{{payment_url}}/api/payment/manual/status/update",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{order_id}}\",\n  \"status\": \"SUCCESS\",\n  \"utr\": \"UTR123\",\n  \"providerTransactionId\": \"PROV123\",\n  \"providerMsg\": \"manual fix\",\n  \"reason\": \"manual correction\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Manual Status Sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-email",
+                "value": "{{admin_email}}"
+              }
+            ],
+            "url": "{{payment_url}}/api/payment/manual/status/sync",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{transaction_id}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Expire Pending Payin (Prev Day)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-email",
+                "value": "{{admin_email}}"
+              }
+            ],
+            "url": "{{payment_url}}/api/payment/manual/expire/pending-previous-day",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"ops cleanup\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Provider Fee Settlement (Prev Day / Custom Date)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-admin-email",
+                "value": "{{admin_email}}"
+              }
+            ],
+            "url": "{{payment_url}}/api/payment/manual/provider-fee-settlement",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-02-18\"\n}"
+            }
+          }
         }
       ]
     },

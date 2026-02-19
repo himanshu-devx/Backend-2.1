@@ -3,9 +3,20 @@ import { RedisKeys } from "@/constants/redis.constant";
 import { MerchantModel } from "@/models/merchant.model";
 import { ProviderLegalEntityModel } from "@/models/provider-legal-entity.model";
 import { ProviderModel } from "@/models/provider.model";
+import { resolvePayoutPollImmediate } from "@/config/payout-poll.config";
 
 export class CacheService {
   private static TTL = 3600; // 1 hour
+
+  private static applyChannelOverrides(channel: any) {
+    if (!channel) return channel;
+    channel.payout = channel.payout || {};
+    channel.payout.pollImmediately = resolvePayoutPollImmediate(
+      channel.providerId,
+      channel.legalEntityId
+    );
+    return channel;
+  }
 
   /**
    * Get Merchant from cache or DB
@@ -139,7 +150,7 @@ export class CacheService {
   ): Promise<any> {
     const key = RedisKeys.CHANNEL(providerId, legalEntityId);
     const cached = await redis.get(key);
-    if (cached) return JSON.parse(cached);
+    if (cached) return this.applyChannelOverrides(JSON.parse(cached));
 
     const channel = await ProviderLegalEntityModel.findOne({
       providerId,
@@ -149,7 +160,7 @@ export class CacheService {
 
     const cData = channel.toJSON();
     await redis.setex(key, this.TTL, JSON.stringify(cData));
-    return cData;
+    return this.applyChannelOverrides(cData);
   }
 
   /**
@@ -158,14 +169,14 @@ export class CacheService {
   static async getChannelById(id: string): Promise<any> {
     const key = `chan:${id}`;
     const cached = await redis.get(key);
-    if (cached) return JSON.parse(cached);
+    if (cached) return this.applyChannelOverrides(JSON.parse(cached));
 
     const channel = await ProviderLegalEntityModel.findOne({ id });
     if (!channel) return null;
 
     const cData = channel.toJSON();
     await redis.setex(key, this.TTL, JSON.stringify(cData));
-    return cData;
+    return this.applyChannelOverrides(cData);
   }
 
   /**

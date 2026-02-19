@@ -10,7 +10,7 @@ import { PaymentLedgerService } from "@/services/payment/payment-ledger.service"
 import { LedgerService } from "@/services/ledger/ledger.service";
 import { LedgerUtils } from "@/utils/ledger.utils";
 import { ENTITY_TYPE, ENTITY_ACCOUNT_TYPE } from "@/constants/ledger.constant";
-import { AccountType } from "fintech-ledger";
+import { AccountType, InsufficientFundsError } from "fintech-ledger";
 import { PaymentError, PaymentErrorCode, mapToPaymentError } from "@/utils/payment-errors.util";
 import { PaymentRoutingService } from "@/services/payment/payment-routing.service";
 import { ProviderClient } from "@/services/provider-config/provider-client.service";
@@ -18,6 +18,7 @@ import { TpsService } from "@/services/common/tps.service";
 import { ENV } from "@/config/env";
 import { logger } from "@/infra/logger-instance";
 import { mapFeeDetailToStorage, toStorageAmount } from "@/utils/money.util";
+import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
 
 export class PayoutWorkflow extends BasePaymentWorkflow<
     InitiatePayoutDto,
@@ -146,6 +147,17 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
                 },
                 "[PayoutWorkflow] Ledger initiate failed"
             );
+            if (
+                error instanceof InsufficientFundsError ||
+                error?.name === "InsufficientFundsError" ||
+                /insufficient\\s+funds/i.test(error?.message || "")
+            ) {
+                throw new PaymentError(PaymentErrorCode.INSUFFICIENT_BALANCE, {
+                    accountId: error?.accountId,
+                    balance: error?.balance,
+                    required: error?.required,
+                });
+            }
             throw new PaymentError(PaymentErrorCode.LEDGER_HOLD_FAILED, {
                 originalError: error.message
             });
@@ -286,6 +298,14 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
                 },
                 "[PayoutWorkflow] Provider initiated"
             );
+
+            if (
+                this.transaction.status === TransactionStatus.PENDING ||
+                this.transaction.status === TransactionStatus.PROCESSING
+            ) {
+                const pollImmediately = !!this.channel?.payout?.pollImmediately;
+                await TransactionMonitorService.schedulePayoutPolling(this.transaction.id, pollImmediately);
+            }
         } else {
             throw new Error(result.message || "Provider payout failed");
         }

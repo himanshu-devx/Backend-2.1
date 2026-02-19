@@ -18,7 +18,9 @@ export class WebhookController {
                 type,
                 providerId,
                 legalEntityId,
-                rawBodyLength: rawBody.length
+                rawBodyLength: rawBody.length,
+                rawBody,
+                headers: Object.fromEntries(c.req.raw.headers.entries())
             },
             "[Webhook Producer] Received webhook"
         );

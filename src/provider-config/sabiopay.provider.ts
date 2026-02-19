@@ -253,14 +253,13 @@ export class SabioPayProvider extends BaseProvider {
     if (
       !req.beneficiaryName ||
       !req.beneficiaryAccountNumber ||
-      !req.beneficiaryBankIfsc ||
-      !req.mode
+      !req.beneficiaryBankIfsc
     ) {
       return this.formatErrorResponse(
         "payout",
         req.transactionId,
         req.amount,
-        new Error("SabioPay payout missing beneficiary details/mode")
+        new Error("SabioPay payout missing beneficiary details")
       ) as ProviderPayoutResult;
     }
 
@@ -307,6 +306,15 @@ export class SabioPayProvider extends BaseProvider {
         },
       });
 
+      const errorCode = (response.data as any)?.error_code;
+      if (errorCode && String(errorCode) !== "0") {
+        const errMsg =
+          (response.data as any)?.error?.message ||
+          response.data?.message ||
+          `SabioPay payout error (${errorCode})`;
+        throw new Error(errMsg);
+      }
+
       if ((response.data as any)?.error) {
         const errorBlock = (response.data as any)?.error;
         const errMsg =
@@ -323,13 +331,22 @@ export class SabioPayProvider extends BaseProvider {
         responseData.payout_id;
       const status = mapStatusText(responseData.status);
       const bankRef = responseData.bank_reference_number || undefined;
+      const errorMessage =
+        responseData.error_message ||
+        response.data?.message ||
+        (status === "FAILED" ? "SabioPay payout failed" : undefined);
+      const message =
+        errorMessage ||
+        response.data?.message ||
+        (status === "PENDING" ? "Payout processing" : "Payout initiated");
+      const providerMsg = response.data?.message || responseData.error_message || "Sabio Failed";
 
       return {
         type: "payout",
         success: status !== "FAILED",
         status,
-        message: response.data?.message || "Payout initiated",
-        providerMsg: response.data?.message,
+        message,
+        providerMsg,
         transactionId: req.transactionId,
         providerTransactionId: payoutId ? String(payoutId) : undefined,
         amount: req.amount,
@@ -401,12 +418,13 @@ export class SabioPayProvider extends BaseProvider {
 
       if ((response.data as any)?.error) {
         const errorBlock = (response.data as any)?.error;
+        const errorMsg =
+          errorBlock?.message ||
+          (typeof errorBlock === "string" ? errorBlock : null) ||
+          "Status check failed";
         return {
           status: "FAILED",
-          message:
-            errorBlock?.message ||
-            (typeof errorBlock === "string" ? errorBlock : null) ||
-            "Status check failed",
+          message: errorMsg,
         };
       }
 
@@ -416,6 +434,7 @@ export class SabioPayProvider extends BaseProvider {
         message: response.data?.message,
         utr:
           response.data?.data?.bank_reference_number ||
+          response.data?.data?.transaction_reference_number ||
           response.data?.data?.transaction_id ||
           undefined,
       };

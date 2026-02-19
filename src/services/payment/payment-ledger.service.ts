@@ -7,11 +7,40 @@ import { getISTDate } from "@/utils/date.util";
 import { toDisplayAmount } from "@/utils/money.util";
 
 export class PaymentLedgerService {
+    private static metaGet(transaction: TransactionDocument, key: string) {
+        if ((transaction.meta as any)?.get) return (transaction.meta as any).get(key);
+        return (transaction.meta as any)?.[key];
+    }
+
+    private static metaSet(transaction: TransactionDocument, key: string, value: any) {
+        if ((transaction.meta as any)?.set) {
+            (transaction.meta as any).set(key, value);
+            return;
+        }
+        (transaction.meta as any)[key] = value;
+    }
+
+    private static recordManualLedgerEntry(
+        transaction: TransactionDocument,
+        entryId: string,
+        action: string
+    ) {
+        const existing = this.metaGet(transaction, "manualLedgerEntries") || [];
+        const next = [
+            ...existing,
+            { id: entryId, action, timestamp: getISTDate() }
+        ];
+        this.metaSet(transaction, "manualLedgerEntries", next);
+    }
+
     /**
      * Finalize Payin: Move funds from Provider Asset to Merchant Liability
      * Triggered via Webhook
      */
-    static async processPayinCredit(transaction: TransactionDocument) {
+    static async processPayinCredit(
+        transaction: TransactionDocument,
+        options?: { manual?: boolean; action?: string }
+    ) {
         const merchantPayinAccountId = LedgerUtils.generateAccountId(
             ENTITY_TYPE.MERCHANT,
             transaction.merchantId as string,
@@ -55,10 +84,14 @@ export class PaymentLedgerService {
             status: "POSTED"
         });
 
-        if (transaction?.meta?.set) {
-            transaction.meta.set("ledgerEntryId", entryId);
-        } else if (transaction?.meta) {
-            (transaction.meta as any).ledgerEntryId = entryId;
+        if (options?.manual) {
+            this.recordManualLedgerEntry(
+                transaction,
+                entryId,
+                options.action || "PAYIN_MANUAL_CREDIT"
+            );
+        } else {
+            this.metaSet(transaction, "ledgerEntryId", entryId);
         }
         await transaction.save();
         return entryId;
@@ -118,16 +151,12 @@ export class PaymentLedgerService {
      * Commit Payout: Mark PENDING entry as POSTED
      */
     static async commitPayout(transaction: TransactionDocument) {
-        const entryId = transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
+        const entryId = this.metaGet(transaction, "ledgerEntryId");
         if (!entryId) return; // No pending entry to commit
 
         await LedgerService.post(entryId);
 
-        if (transaction?.meta?.set) {
-            transaction.meta.set("ledgerExectued", true);
-        } else if (transaction?.meta) {
-            (transaction.meta as any).ledgerExecuted = true;
-        }
+        this.metaSet(transaction, "ledgerExecuted", true);
         await transaction.save();
         return entryId;
     }
@@ -136,16 +165,78 @@ export class PaymentLedgerService {
      * Void Payout: Mark PENDING entry as VOID (Releasing funds)
      */
     static async voidPayout(transaction: TransactionDocument) {
-        const entryId = transaction.meta?.get("ledgerEntryId") || (transaction.meta as any)?.ledgerEntryId;
+        const entryId = this.metaGet(transaction, "ledgerEntryId");
         if (!entryId) return; // No pending entry to void
 
         await LedgerService.void(entryId);
 
-        if (transaction?.meta?.set) {
-            transaction.meta.set("ledgerVoided", true);
-        } else if (transaction?.meta) {
-            (transaction.meta as any).ledgerVoided = true;
+        this.metaSet(transaction, "ledgerVoided", true);
+        await transaction.save();
+        return entryId;
+    }
+
+    /**
+     * Reverse a posted entry by creating a new inverse entry.
+     * Stores the new entry ID under manualLedgerEntries without touching the original.
+     */
+    static async reverseEntry(
+        transaction: TransactionDocument,
+        entryId: string,
+        action: string
+    ) {
+        const revId = await LedgerService.reverse(entryId);
+        this.recordManualLedgerEntry(transaction, revId, action);
+        this.metaSet(transaction, "ledgerReversed", true);
+        await transaction.save();
+        return revId;
+    }
+
+    /**
+     * Manual Payout Post: create a NEW posted entry (no update to original entry).
+     */
+    static async manualPostPayout(transaction: TransactionDocument) {
+        const sourceId = LedgerUtils.generateAccountId(
+            ENTITY_TYPE.MERCHANT,
+            transaction.merchantId as string,
+            AccountType.LIABILITY,
+            ENTITY_ACCOUNT_TYPE.PAYOUT
+        );
+        const providerSettlementId = LedgerUtils.generateAccountId(
+            ENTITY_TYPE.PROVIDER,
+            transaction.providerLegalEntityId || `${transaction.providerId}_${transaction.legalEntityId}`,
+            AccountType.ASSET,
+            ENTITY_ACCOUNT_TYPE.PAYOUT
+        );
+        const platformIncomeId = LedgerUtils.generateAccountId(
+            ENTITY_TYPE.INCOME,
+            "INCOME",
+            AccountType.INCOME,
+            ENTITY_ACCOUNT_TYPE.INCOME
+        );
+
+        const merchantFees = transaction.fees?.merchantFees;
+        const txnAmount = toDisplayAmount(transaction.amount);
+        const txnNetAmount = toDisplayAmount(transaction.netAmount);
+        const merchantFeeTotal = merchantFees ? toDisplayAmount(merchantFees.total) : 0;
+
+        const credits = [
+            { accountId: providerSettlementId, amount: txnAmount as any }
+        ];
+        if (merchantFeeTotal > 0) {
+            credits.push({ accountId: platformIncomeId, amount: merchantFeeTotal as any });
         }
+
+        const entryId = await LedgerService.transfer({
+            narration: `Payout Manual Success: ${transaction.orderId}`,
+            externalRef: transaction.id,
+            valueDate: getISTDate(),
+            debits: [{ accountId: sourceId, amount: txnNetAmount as any }],
+            credits,
+            status: "POSTED"
+        });
+
+        this.recordManualLedgerEntry(transaction, entryId, "PAYOUT_MANUAL_POST");
+        this.metaSet(transaction, "ledgerExecuted", true);
         await transaction.save();
         return entryId;
     }

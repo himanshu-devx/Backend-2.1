@@ -19,12 +19,42 @@ export class ProviderFeeSettlementService {
         yesterday.setDate(yesterday.getDate() - 1);
         const dateStr = yesterday.toISOString().split('T')[0];
 
-        logger.info({ date: dateStr }, "[ProviderFeeSettlementService] Starting EOD enqueue");
+        await this.enqueueSettlementForDate(dateStr);
+    }
 
-        // Process ALL PLEs regardless of status as per requirement
-        const allPles = await ProviderLegalEntityModel.find({}).select('id');
+    /**
+     * Enqueue settlement jobs for a specific date (YYYY-MM-DD in IST).
+     * If skipIfExists is true, PLEs with any settlement txn already present for the date are skipped.
+     */
+    static async enqueueSettlementForDate(
+        dateStr: string,
+        options?: { skipIfExists?: boolean }
+    ) {
+        logger.info(
+            { date: dateStr, skipIfExists: !!options?.skipIfExists },
+            "[ProviderFeeSettlementService] Starting settlement enqueue"
+        );
+
+        const allPles = await ProviderLegalEntityModel.find({}).select("id");
+        let existingSet = new Set<string>();
+
+        if (options?.skipIfExists) {
+            const settledPles = await TransactionModel.distinct("providerLegalEntityId", {
+                type: { $in: [TransactionType.PLE_PAYIN_FEE_CHARGE, TransactionType.PLE_PAYOUT_FEE_CHARGE] },
+                "meta.settlementDate": dateStr
+            });
+            existingSet = new Set(settledPles as string[]);
+        }
+
+        let enqueued = 0;
+        let skipped = 0;
 
         for (const ple of allPles) {
+            if (existingSet.has(ple.id)) {
+                skipped += 1;
+                continue;
+            }
+
             await JobQueue.enqueue({
                 type: "PROVIDER_FEE_SETTLEMENT",
                 payload: {
@@ -32,9 +62,15 @@ export class ProviderFeeSettlementService {
                     targetDate: dateStr
                 }
             });
+            enqueued += 1;
         }
 
-        logger.info({ count: allPles.length }, "[ProviderFeeSettlementService] Enqueued settlement jobs");
+        logger.info(
+            { date: dateStr, total: allPles.length, enqueued, skipped },
+            "[ProviderFeeSettlementService] Enqueued settlement jobs"
+        );
+
+        return { date: dateStr, total: allPles.length, enqueued, skipped };
     }
 
     /**
@@ -151,7 +187,9 @@ export class ProviderFeeSettlementService {
      */
     static async verifySettlements(dateStr?: string) {
         if (!dateStr) {
-            const yesterday = new Date();
+            // Default to "yesterday" in IST
+            const nowIst = getISTDate();
+            const yesterday = new Date(nowIst);
             yesterday.setDate(yesterday.getDate() - 1);
             dateStr = yesterday.toISOString().split('T')[0];
         }
