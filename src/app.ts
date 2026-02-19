@@ -10,6 +10,7 @@ import { contextMiddleware } from "./middlewares/context";
 
 import { safeBody } from "./middlewares/safe-body";
 import { ENV } from "./config/env";
+import { requestValidation } from "./middlewares/request-validation";
 
 import { secureHeaders } from "hono/secure-headers";
 
@@ -42,25 +43,60 @@ export function buildApp(corsMode: CorsMode = "api"): Hono {
   const app = new Hono();
 
   // 1. Security Headers
-  app.use("*", secureHeaders());
+  app.use(
+    "*",
+    secureHeaders({
+      strictTransportSecurity:
+        ENV.NODE_ENV === "production"
+          ? "max-age=63072000; includeSubDomains; preload"
+          : false,
+      xFrameOptions: "DENY",
+      referrerPolicy: "no-referrer",
+      crossOriginResourcePolicy: "same-origin",
+      crossOriginOpenerPolicy: "same-origin",
+      crossOriginEmbedderPolicy: "require-corp",
+      permissionsPolicy: {
+        accelerometer: [],
+        camera: [],
+        geolocation: [],
+        gyroscope: [],
+        magnetometer: [],
+        microphone: [],
+        payment: [],
+        usb: [],
+      },
+    })
+  );
+
+  app.use("*", requestValidation());
+
+  const allowedOrigins = new Set(
+    (ENV.CORS_ALLOWED_ORIGINS || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  );
+  if (ENV.FRONTEND_URL) {
+    allowedOrigins.add(ENV.FRONTEND_URL);
+  }
 
   app.use(
     "*",
     cors({
       origin: (origin) => {
-        console.log(`[CORS] Checking origin: ${origin}`);
         if (corsMode === "payment") return "*";
         if (!origin) return null;
-        if (
+        const isLocal =
           origin.startsWith("http://localhost:") ||
           origin.startsWith("http://127.0.0.1:") ||
-          origin.startsWith("https://localhost:") ||
-          origin === "http://localhost:3000"
-        ) {
+          origin.startsWith("https://localhost:");
+
+        if (ENV.NODE_ENV !== "production" && isLocal) {
           return origin;
         }
-        if (ENV.FRONTEND_URL && origin === ENV.FRONTEND_URL) return origin;
-        return origin; // Temporary allowable for all for debugging if needed, but better to stick to logic.
+
+        if (allowedOrigins.has(origin)) return origin;
+        return null;
       },
       allowHeaders: corsMode === "payment" ? PAYMENT_ALLOW_HEADERS : API_ALLOW_HEADERS,
       allowMethods: ALLOW_METHODS,

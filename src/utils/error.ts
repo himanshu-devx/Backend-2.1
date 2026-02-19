@@ -85,6 +85,16 @@ export const TooManyRequests = (
     details,
   });
 
+export const PayloadTooLarge = (
+  message = "Payload too large",
+  details?: unknown
+) =>
+  new AppError(message, {
+    code: "PAYLOAD_TOO_LARGE",
+    status: 413,
+    details,
+  });
+
 // ************************
 
 export const InternalError = (

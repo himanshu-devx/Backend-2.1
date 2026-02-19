@@ -8,21 +8,16 @@ export const validateBody =
   <T>(schema: ZodSchema<T>): MiddlewareHandler =>
   async (c: Context, next: Next) => {
     try {
-      const body = await c.req.json();
-      console.log(
-        "[DEBUG] ValidateBody received:",
-        JSON.stringify(body, null, 2)
-      );
+      const bodyParseError = c.get("bodyParseError");
+      if (bodyParseError) {
+        throw BadRequest("Malformed JSON body provided.");
+      }
+
+      const body = c.get("body") ?? (await c.req.json());
       const result = schema.safeParse(body);
       if (!result.success) {
-        console.log(
-          "[DEBUG] Validation Error:",
-          JSON.stringify(result.error.flatten(), null, 2)
-        );
         throw BadRequest(
-          `VALIDATION_FAILED: ${JSON.stringify(
-            body
-          )} | ERRORS: ${JSON.stringify(result.error.flatten().fieldErrors)}`,
+          "VALIDATION_FAILED",
           result.error.flatten().fieldErrors
         );
       }

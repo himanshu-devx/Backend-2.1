@@ -4,8 +4,17 @@ import { LedgerService } from "@/services/ledger/ledger.service";
 import { ReportService } from "@/services/common/report.service";
 import { emailService } from "@/infra/email";
 import { ENV } from "@/config/env";
+import {
+  recordSecurityConfigSnapshot,
+  validateSecurityConfig,
+} from "@/utils/security-config.util";
+import { AuditSink } from "@/services/common/audit-sink.service";
 
 export async function bootstrap() {
+  validateSecurityConfig();
+  await AuditSink.init();
+  await recordSecurityConfigSnapshot();
+
   await connectMongo();
 
   try {

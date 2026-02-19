@@ -5,14 +5,31 @@ const ALGO = "aes-256-gcm";
 const PREFIX = "enc_v1";
 const IV_LENGTH = 12;
 
-const deriveKey = () => {
-  const base = ENV.API_SECRET_ENC_KEY || ENV.JWT_SECRET;
-  return crypto.createHash("sha256").update(base).digest();
+const parseKeyMaterials = (): string[] => {
+  const primary = ENV.API_SECRET_ENC_KEY;
+  if (!primary) return [];
+
+  const extras = (ENV.API_SECRET_ENC_KEYS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const unique = new Set([primary, ...extras]);
+  return Array.from(unique);
 };
 
+const deriveKey = (material: string) =>
+  crypto.createHash("sha256").update(material).digest();
+
+const getKeyring = (): Buffer[] => parseKeyMaterials().map(deriveKey);
+
 export const encryptSecret = (plain: string): string => {
+  const keyring = getKeyring();
+  if (keyring.length === 0) {
+    throw new Error("API_SECRET_ENC_KEY is required for encryption.");
+  }
   const iv = crypto.randomBytes(IV_LENGTH);
-  const key = deriveKey();
+  const key = keyring[0];
   const cipher = crypto.createCipheriv(ALGO, key, iv);
   const ciphertext = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
@@ -29,20 +46,29 @@ export const decryptSecret = (value: string): string | null => {
 
   const [, ivB64, tagB64, dataB64] = parts;
 
-  try {
-    const iv = Buffer.from(ivB64, "base64");
-    const tag = Buffer.from(tagB64, "base64");
-    const data = Buffer.from(dataB64, "base64");
-    const key = deriveKey();
+  const iv = Buffer.from(ivB64, "base64");
+  const tag = Buffer.from(tagB64, "base64");
+  const data = Buffer.from(dataB64, "base64");
 
-    const decipher = crypto.createDecipheriv(ALGO, key, iv);
-    decipher.setAuthTag(tag);
+  const keyring = getKeyring();
+  if (keyring.length === 0) return null;
 
-    const plaintext = Buffer.concat([decipher.update(data), decipher.final()]);
-    return plaintext.toString("utf8");
-  } catch {
-    return null;
+  for (const key of keyring) {
+    try {
+      const decipher = crypto.createDecipheriv(ALGO, key, iv);
+      decipher.setAuthTag(tag);
+
+      const plaintext = Buffer.concat([
+        decipher.update(data),
+        decipher.final(),
+      ]);
+      return plaintext.toString("utf8");
+    } catch {
+      // Try next key for rotation support.
+    }
   }
+
+  return null;
 };
 
 export const isEncryptedSecret = (value: string): boolean =>

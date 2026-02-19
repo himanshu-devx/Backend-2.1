@@ -1,6 +1,7 @@
 import { trace, context } from "@opentelemetry/api";
 import { AuditEvent } from "@/types/audit-log.types";
 import { logger } from "@/infra/logger-instance";
+import { AuditSink } from "@/services/common/audit-sink.service";
 
 import { getISTDate } from "@/utils/date.util";
 
@@ -36,6 +37,12 @@ export class AuditService {
       },
       "audit-event"
     );
+
+    try {
+      void AuditSink.append(event);
+    } catch {
+      // sink failures should never block primary flow
+    }
 
     // 2) Attach OTel span event for trace timeline (if span exists)
     const span = trace.getSpan(context.active());

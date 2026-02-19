@@ -16,25 +16,11 @@ export const paymentSecurityMiddleware = (
     const merchantId = c.req.header("x-merchant-id");
     const timestampStr = c.req.header("x-timestamp");
 
-    // Safety check for body parsing first
-    let body: any = {};
-    let rawBody = "";
-
-    if (c.req.method === "POST" || c.req.method === "PUT") {
-        try {
-            rawBody = await c.req.text(); // Read raw text once
-            if (rawBody) {
-                try {
-                    body = JSON.parse(rawBody);
-                } catch (jsonErr) {
-                    // Maybe form data or invalid json, try parseBody fallback if needed or just ignore
-                    // But for signature we need raw body.
-                    // If JSON parse fails, body remains {} which is fine for basic checks but validation will fail later
-                }
-            }
-        } catch (e) {
-            logger.warn("[PaymentSecurity] Failed to read request body");
-        }
+    const body = (c.get("body") ?? {}) as Record<string, any>;
+    const rawBody = (c.get("rawBody") ?? "") as string;
+    const bodyParseError = c.get("bodyParseError");
+    if (bodyParseError) {
+        throw BadRequest("Malformed JSON body provided.");
     }
 
     let signature = (c.req.header("x-signature") || body["hash"] || "") as string;
