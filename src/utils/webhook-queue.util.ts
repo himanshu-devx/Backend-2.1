@@ -32,6 +32,8 @@ export class WebhookQueue {
             await redis.lpush(WEBHOOK_QUEUE_KEY, JSON.stringify(fullTask));
             logger.info(
                 {
+                    event: "webhook.enqueue",
+                    component: "queue",
                     type: task.type,
                     providerId: task.providerId,
                     legalEntityId: task.legalEntityId,
@@ -74,7 +76,17 @@ export class WebhookQueue {
 
         if (attempt > maxAttempts) {
             await redis.lpush(WEBHOOK_DLQ_KEY, JSON.stringify(updated));
-            logger.error(`[WebhookQueue] Task moved to DLQ after ${attempt - 1} retries`);
+            logger.error(
+                {
+                    event: "webhook.dlq",
+                    component: "queue",
+                    type: task.type,
+                    providerId: task.providerId,
+                    legalEntityId: task.legalEntityId,
+                    attempts: attempt,
+                },
+                `[WebhookQueue] Task moved to DLQ after ${attempt - 1} retries`
+            );
             return;
         }
 
@@ -85,7 +97,19 @@ export class WebhookQueue {
         const runAt = Date.now() + delay;
 
         await redis.zadd(WEBHOOK_DELAYED_KEY, runAt, JSON.stringify(updated));
-        logger.warn(`[WebhookQueue] Retrying task in ${delay}ms (attempt ${attempt}/${maxAttempts})`);
+        logger.warn(
+            {
+                event: "webhook.retry",
+                component: "queue",
+                type: task.type,
+                providerId: task.providerId,
+                legalEntityId: task.legalEntityId,
+                attempt,
+                maxAttempts,
+                delay,
+            },
+            `[WebhookQueue] Retrying task in ${delay}ms (attempt ${attempt}/${maxAttempts})`
+        );
     }
 
     private static async popDueDelayed(): Promise<WebhookTask | null> {

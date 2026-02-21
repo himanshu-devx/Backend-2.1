@@ -2,6 +2,7 @@ import { bootstrap } from "@/bootstrap";
 import { registerAllCronJobs } from "@/cron/index";
 import { BackgroundWorker } from "@/workers/background.worker";
 import { logger } from "@/infra/logger-instance";
+import "@/infra/otel-sdk";
 
 async function main() {
     logger.info("[WorkerInstance] Initializing Background Services...");

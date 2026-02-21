@@ -385,21 +385,31 @@ export class PayprimeProvider extends BaseProvider {
     input: ProviderWebhookInput,
     _type: "PAYIN" | "PAYOUT" | "COMMON"
   ): Promise<ProviderWebhookResult> {
-    const payload = parseJsonBody(input.rawBody || "");
-    const data =
-      payload && typeof payload.data === "object" ? (payload.data as any) : {};
+    const parsed = parseJsonBody(input.rawBody || "");
+    const payload =
+      Array.isArray(parsed) && parsed.length > 0 ? (parsed[0] as any) : (parsed as any);
+    const dataBlock =
+      payload && typeof payload.data === "object"
+        ? Array.isArray(payload.data)
+          ? (payload.data[0] as any)
+          : (payload.data as any)
+        : {};
+    const data = dataBlock && typeof dataBlock === "object" ? dataBlock : {};
     const inner =
       data && typeof data.data === "object" ? (data.data as any) : {};
 
     const transactionId = resolveString(
-      payload.clientRefId,
-      payload.client_ref_id,
-      payload.clientRefID,
-      payload.clientRef,
       data.clientRefId,
       data.client_ref_id,
       inner.clientRefId,
       inner.client_ref_id,
+      payload.clientRefId,
+      payload.client_ref_id,
+      payload.clientRefID,
+      payload.clientRef,
+      payload.payid,
+      data.payid,
+      inner.payid,
       payload.order_id,
       payload.orderId,
       data.order_id,
@@ -408,30 +418,33 @@ export class PayprimeProvider extends BaseProvider {
       inner.orderId
     );
 
-    if (!transactionId) {
+    const providerTransactionId = resolveString(
+      payload.payid,
+      data.payid,
+      inner.payid,
+      payload.order_id,
+      payload.orderId,
+      data.order_id,
+      data.orderId,
+      inner.order_id,
+      inner.orderId
+    );
+    if (!transactionId && !providerTransactionId) {
       throw new Error("Payprime webhook missing transaction reference");
     }
 
-    const providerTransactionId = resolveString(
-      payload.order_id,
-      payload.orderId,
-      data.order_id,
-      data.orderId,
-      inner.order_id,
-      inner.orderId
-    );
-
     const statusText = resolveString(
+      data.status,
       payload.txn_status,
       payload.status,
       data.txn_status,
-      data.status,
-      inner.status
+      inner.status,
+      payload.statuscode
     );
     const status = mapPayprimeStatus(statusText);
 
     const message =
-      resolveString(payload.message, data.message, inner.message) ||
+      resolveString(data.message, payload.message, inner.message) ||
       (status === "FAILED"
         ? "Payout Failed"
         : status === "PENDING"
@@ -444,9 +457,10 @@ export class PayprimeProvider extends BaseProvider {
       status,
       message,
       providerMsg: statusText || message,
-      transactionId,
+      transactionId: transactionId || "",
       providerTransactionId,
-      amount: toNumber(payload.amount ?? data.amount ?? inner.amount),
+      amount: toNumber(data.amount ?? payload.amount ?? inner.amount),
+      utr: resolveString(data.utr, payload.utr, inner.utr),
     };
   }
 }

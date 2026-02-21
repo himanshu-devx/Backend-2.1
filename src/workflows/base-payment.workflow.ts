@@ -25,7 +25,15 @@ export abstract class BasePaymentWorkflow<
     async execute(dto: T_DTO): Promise<T_RES> {
         this.currentSteps = this.buildStepList();
         try {
-            logger.info(`[Workflow] Starting ${this.getWorkflowName()} for merchant ${this.merchant.id}`);
+            logger.info(
+                {
+                    event: "payment.workflow.start",
+                    component: "payment",
+                    workflow: this.getWorkflowName(),
+                    merchantId: this.merchant.id,
+                },
+                `[Workflow] Starting ${this.getWorkflowName()} for merchant ${this.merchant.id}`
+            );
 
             // 1. Initial Checks & Context
             this.logStep(0, dto);
@@ -139,7 +147,22 @@ export abstract class BasePaymentWorkflow<
             ctx.orderId = this.transaction.orderId;
         }
 
-        logger.error(ctx, `[Workflow] Failed: ${error.message}`);
+        const errorMeta = {
+            errorType: error?.name,
+            errorMessage: error?.message,
+            errorCode: error?.code,
+            retryable: error?.retryable,
+        };
+
+        logger.error(
+            {
+                event: "payment.workflow.failed",
+                component: "payment",
+                ...ctx,
+                ...errorMeta,
+            },
+            `[Workflow] Failed: ${error.message}`
+        );
 
         if (this.transaction) {
             this.transaction.status = TransactionStatus.FAILED;
@@ -198,7 +221,14 @@ export abstract class BasePaymentWorkflow<
         const orderId = (dto as any)?.orderId;
         if (orderId) ctx.orderId = orderId;
         if (this.transaction?.id) ctx.transactionId = this.transaction.id;
-        logger.info(ctx, "[Workflow] Step");
+        logger.info(
+            {
+                event: "payment.workflow.step",
+                component: "payment",
+                ...ctx,
+            },
+            "[Workflow] Step"
+        );
     }
 
     private logFailureSteps(error: any, dto: T_DTO): void {
@@ -213,10 +243,19 @@ export abstract class BasePaymentWorkflow<
             currentStepNumber: this.currentStepIndex + 1,
             pendingSteps,
             error: error?.message,
+            errorCode: error?.code,
+            errorType: error?.name,
         };
         const orderId = (dto as any)?.orderId;
         if (orderId) ctx.orderId = orderId;
         if (this.transaction?.id) ctx.transactionId = this.transaction.id;
-        logger.error(ctx, "[Workflow] Failure with pending steps");
+        logger.error(
+            {
+                event: "payment.workflow.failure_steps",
+                component: "payment",
+                ...ctx,
+            },
+            "[Workflow] Failure with pending steps"
+        );
     }
 }

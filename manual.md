@@ -45,12 +45,14 @@ Notes:
 Body (optional):
 ```json
 {
+  "date": "YYYY-MM-DD",
   "reason": "ops cleanup"
 }
 ```
 
 Notes:
-- Expires only `PAYIN` transactions from **previous day (IST)** that are still `PENDING/PROCESSING`.
+- If `date` is omitted, expires **previous day (IST)** payins; otherwise uses the provided date.
+- Expires only `PAYIN` transactions for that date (IST) that are still `PENDING/PROCESSING`.
 - Sends merchant callbacks and records audit events.
 
 ## Provider Fee Settlement (Previous Day / Custom Date, IST)

@@ -7,6 +7,7 @@ import paymentRoutes from "@/routes/payment/payment.routes";
 import webhookRoutes from "@/routes/payment/webhook.routes";
 import { rateLimiter } from "@/middlewares/rate-limiter";
 import { serve } from "@hono/node-server";
+import "@/infra/otel-sdk";
 
 await bootstrap();
 const app = buildApp("payment");

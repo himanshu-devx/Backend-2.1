@@ -72,6 +72,37 @@ const parseWebhookBody = (rawBody: string): SabioWebhookPayload => {
   return payload;
 };
 
+const DUPLICATE_MERCHANT_REF_MESSAGE =
+  "Merchant reference number should be unique";
+
+const extractErrorDetails = (payload?: SabioResponse) => {
+  const errorBlock = payload?.error;
+  const errorCode =
+    payload?.error_code ??
+    (typeof errorBlock === "object" ? errorBlock?.code : undefined);
+  const errorMessage =
+    (typeof errorBlock === "object" ? errorBlock?.message : undefined) ||
+    (typeof errorBlock === "string" ? errorBlock : undefined) ||
+    payload?.message ||
+    payload?.data?.error_message;
+  return { errorCode, errorMessage };
+};
+
+const isDuplicateMerchantRefError = (payload?: SabioResponse): boolean => {
+  if (!payload) return false;
+  const { errorCode, errorMessage } = extractErrorDetails(payload);
+  if (errorCode !== undefined && String(errorCode) === "1003") return true;
+  if (
+    errorMessage &&
+    errorMessage
+      .toLowerCase()
+      .includes(DUPLICATE_MERCHANT_REF_MESSAGE.toLowerCase())
+  ) {
+    return true;
+  }
+  return false;
+};
+
 const mapResponseCode = (code?: string): "SUCCESS" | "FAILED" | "PENDING" => {
   if (!code) return "PENDING";
   if (code === "0") return "SUCCESS";
@@ -306,17 +337,45 @@ export class SabioPayProvider extends BaseProvider {
         },
       });
 
-      const errorCode = (response.data as any)?.error_code;
+      const responsePayload = response.data as SabioResponse;
+      const duplicateRef = isDuplicateMerchantRefError(responsePayload);
+      if (duplicateRef) {
+        const { errorMessage } = extractErrorDetails(responsePayload);
+        logger.warn(
+          {
+            providerId: this.providerId,
+            transactionId: req.transactionId,
+            error: errorMessage,
+          },
+          "[SabioPay] Duplicate merchant reference, treating as pending"
+        );
+        return {
+          type: "payout",
+          success: true,
+          status: "PENDING",
+          message:
+            errorMessage ||
+            "Duplicate merchant reference number, treating as pending",
+          providerMsg: errorMessage || responsePayload.message,
+          transactionId: req.transactionId,
+          providerTransactionId: responsePayload.data?.transaction_id
+            ? String(responsePayload.data?.transaction_id)
+            : undefined,
+          amount: req.amount,
+        };
+      }
+
+      const errorCode = (responsePayload as any)?.error_code;
       if (errorCode && String(errorCode) !== "0") {
         const errMsg =
-          (response.data as any)?.error?.message ||
-          response.data?.message ||
+          (responsePayload as any)?.error?.message ||
+          responsePayload?.message ||
           `SabioPay payout error (${errorCode})`;
         throw new Error(errMsg);
       }
 
-      if ((response.data as any)?.error) {
-        const errorBlock = (response.data as any)?.error;
+      if ((responsePayload as any)?.error) {
+        const errorBlock = (responsePayload as any)?.error;
         const errMsg =
           errorBlock?.message ||
           (typeof errorBlock === "string" ? errorBlock : null) ||
@@ -324,7 +383,7 @@ export class SabioPayProvider extends BaseProvider {
         throw new Error(errMsg);
       }
 
-      const responseData = response.data?.data || {};
+      const responseData = responsePayload?.data || {};
       const payoutId =
         responseData.transaction_id ||
         responseData.transaction_reference_number ||
@@ -339,7 +398,8 @@ export class SabioPayProvider extends BaseProvider {
         errorMessage ||
         response.data?.message ||
         (status === "PENDING" ? "Payout processing" : "Payout initiated");
-      const providerMsg = response.data?.message || responseData.error_message || "Sabio Failed";
+      const providerMsg =
+        responsePayload?.message || responseData.error_message || "Sabio Failed";
 
       return {
         type: "payout",
@@ -353,6 +413,40 @@ export class SabioPayProvider extends BaseProvider {
         utr: bankRef || undefined,
       };
     } catch (error: any) {
+      const errorPayload = error?.response?.data as SabioResponse | undefined;
+      const hasDuplicateMessage =
+        !!error?.message &&
+        String(error.message)
+          .toLowerCase()
+          .includes(DUPLICATE_MERCHANT_REF_MESSAGE.toLowerCase());
+      if (isDuplicateMerchantRefError(errorPayload) || hasDuplicateMessage) {
+        const { errorMessage } = extractErrorDetails(errorPayload);
+        const resolvedMessage =
+          errorMessage ||
+          (hasDuplicateMessage ? error.message : undefined);
+        logger.warn(
+          {
+            providerId: this.providerId,
+            transactionId: req.transactionId,
+            error: resolvedMessage,
+          },
+          "[SabioPay] Duplicate merchant reference, treating as pending"
+        );
+        return {
+          type: "payout",
+          success: true,
+          status: "PENDING",
+          message:
+            resolvedMessage ||
+            "Duplicate merchant reference number, treating as pending",
+          providerMsg: resolvedMessage || errorPayload?.message,
+          transactionId: req.transactionId,
+          providerTransactionId: errorPayload?.data?.transaction_id
+            ? String(errorPayload?.data?.transaction_id)
+            : undefined,
+          amount: req.amount,
+        };
+      }
       logger.error(
         {
           providerId: this.providerId,

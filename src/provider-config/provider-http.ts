@@ -58,13 +58,52 @@ const SENSITIVE_KEYS = new Set([
   "authorization",
   "x-signature",
   "x-api-key",
+  "password",
+  "pin",
+  "otp",
+  "cvv",
+  "card",
+  "cardnumber",
+  "card_number",
+  "pan",
+  "aadhaar",
+  "aadhar",
+  "upi",
+  "vpa",
+  "ifsc",
+  "account",
+  "accountnumber",
+  "account_number",
+  "beneficiaryaccountnumber",
+  "email",
+  "phone",
+  "mobile",
 ]);
 
 const isSensitiveKey = (key: string) =>
   SENSITIVE_KEYS.has(key.toLowerCase());
 
-const redactValue = (value: any) => {
+const maskGeneric = (value: string) => {
+  if (value.length <= 4) return "***";
+  return `***${value.slice(-4)}`;
+};
+
+const maskEmail = (value: string) => {
+  const at = value.indexOf("@");
+  if (at <= 0) return maskGeneric(value);
+  const name = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  const first = name[0] || "*";
+  return `${first}***@${domain || "***"}`;
+};
+
+const redactValue = (key: string, value: any) => {
   if (value === undefined || value === null) return value;
+  const normalized = key.toLowerCase();
+  if (normalized === "email") return maskEmail(String(value));
+  if (normalized === "phone" || normalized === "mobile") {
+    return maskGeneric(String(value));
+  }
   return "***";
 };
 
@@ -76,7 +115,7 @@ const redactObject = (input: any): any => {
   const output: Record<string, any> = {};
   for (const [key, value] of Object.entries(input)) {
     if (isSensitiveKey(key)) {
-      output[key] = redactValue(value);
+      output[key] = redactValue(key, value);
     } else {
       output[key] = redactObject(value);
     }
@@ -111,6 +150,7 @@ const redactPayload = (data: any, headers?: Record<string, string>) => {
 export async function providerRequest<T = any>(
   req: ProviderHttpRequest
 ): Promise<ProviderHttpResponse<T>> {
+  let rawBody: string | undefined;
   const config: AxiosRequestConfig = {
     method: req.method,
     url: req.url,
@@ -118,14 +158,30 @@ export async function providerRequest<T = any>(
     headers: req.headers,
     timeout: req.timeoutMs ?? 10000,
     responseType: req.responseType === "text" ? "text" : "json",
-    transformResponse:
-      req.responseType === "text" ? [(data) => data] : undefined,
+    transformResponse: [
+      (data) => {
+        if (typeof data === "string") {
+          rawBody = data;
+          if (req.responseType === "text") return data;
+          try {
+            return JSON.parse(data);
+          } catch {
+            return data;
+          }
+        }
+        rawBody = data === undefined ? undefined : JSON.stringify(data);
+        return data;
+      },
+    ],
     validateStatus: () => true,
   };
 
   try {
+    const start = performance.now();
     logger.info(
       {
+        event: "provider.http.request",
+        component: "provider_http",
         ...req.context,
         method: req.method,
         url: req.url,
@@ -136,16 +192,22 @@ export async function providerRequest<T = any>(
     );
 
     const resp: AxiosResponse = await axios.request(config);
-    const rawBody = typeof resp.data === "string" ? resp.data : undefined;
+    const durationMs = Number((performance.now() - start).toFixed(1));
 
     logger.info(
       {
+        event: "provider.http.response",
+        component: "provider_http",
         ...req.context,
         method: req.method,
         url: req.url,
         status: resp.status,
+        success: resp.status >= 200 && resp.status < 300,
+        durationMs,
         headers: redactObject(resp.headers as Record<string, any>),
         data: redactPayload(resp.data),
+        rawBody: redactPayload(rawBody),
+        rawBodyLength: rawBody?.length,
       },
       "[ProviderHTTP] Response"
     );

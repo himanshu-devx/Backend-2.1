@@ -138,8 +138,14 @@ export class PaymentService {
   }
 
   async manualExpirePendingPreviousDay(data: ManualExpirePendingDto, adminEmail: string) {
-    const { start, end, dateStr } = this.resolveExpireRange();
-    const reason = data?.reason || "Expired previous day pending";
+    const dateStrInput = data?.date?.trim();
+    if (dateStrInput && !validateDateFormat(dateStrInput)) {
+      throw BadRequest("Invalid date format. Expected YYYY-MM-DD");
+    }
+    const { start, end, dateStr } = this.resolveExpireRange(dateStrInput);
+    const reason = data?.reason || (dateStrInput
+      ? `Expired pending for ${dateStr}`
+      : "Expired previous day pending");
 
     const pendingTxns = await TransactionModel.find({
       status: { $in: [TransactionStatus.PENDING, TransactionStatus.PROCESSING] },
@@ -295,7 +301,15 @@ export class PaymentService {
     return (transaction as any)?.toObject ? (transaction as any).toObject() : transaction;
   }
 
-  private resolveExpireRange() {
+  private resolveExpireRange(dateStrInput?: string) {
+    if (dateStrInput) {
+      return {
+        start: getISTDayStart(dateStrInput),
+        end: getISTDayEnd(dateStrInput),
+        dateStr: dateStrInput
+      };
+    }
+
     const now = new Date();
     const istNow = new Date(now.getTime() + IST_OFFSET_MS);
     const yesterdayIst = new Date(istNow.getTime() - 24 * 60 * 60 * 1000);

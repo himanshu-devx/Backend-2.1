@@ -4,6 +4,7 @@ import { logger } from "@/infra/logger-instance";
 import { ProviderFeeSettlementService } from "@/services/provider-fee-settlement/provider-fee-settlement.service";
 import { WebhookWorkflow } from "@/workflows/webhook.workflow";
 import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
+import { runWithLogContext } from "@/infra/log-context";
 
 export class BackgroundWorker {
     private static isRunning = true;
@@ -61,51 +62,124 @@ export class BackgroundWorker {
     }
 
     private static async processJobTask(task: JobTask) {
-        logger.info({ jobId: task.id, type: task.type }, "[BackgroundWorker] Processing Job");
-        try {
-            switch (task.type) {
-                case "PROVIDER_FEE_SETTLEMENT":
-                    await ProviderFeeSettlementService.processPLESettlement(
-                        task.payload.pleId,
-                        task.payload.targetDate
+        await runWithLogContext(
+            {
+                component: "worker",
+                jobId: task.id,
+                jobType: task.type,
+                jobAttempt: task.attempt,
+            },
+            async () => {
+                logger.info(
+                    {
+                        event: "job.process.start",
+                        component: "worker",
+                        jobId: task.id,
+                        type: task.type,
+                    },
+                    "[BackgroundWorker] Processing Job"
+                );
+                try {
+                    switch (task.type) {
+                        case "PROVIDER_FEE_SETTLEMENT":
+                            await ProviderFeeSettlementService.processPLESettlement(
+                                task.payload.pleId,
+                                task.payload.targetDate
+                            );
+                            break;
+                        case "PAYIN_AUTO_EXPIRE":
+                            await TransactionMonitorService.processPayinAutoExpire(
+                                task.payload.transactionId
+                            );
+                            break;
+                        case "PAYOUT_STATUS_POLL":
+                            await TransactionMonitorService.processPayoutStatusPoll(
+                                task.payload
+                            );
+                            break;
+                        case "SETTLEMENT_VERIFICATION":
+                            await ProviderFeeSettlementService.verifySettlements();
+                            break;
+                        default:
+                            logger.warn({ type: task.type }, "[BackgroundWorker] Unknown job type");
+                    }
+                    logger.info(
+                        {
+                            event: "job.processed",
+                            component: "worker",
+                            jobId: task.id,
+                            type: task.type,
+                        },
+                        "[BackgroundWorker] Job completed"
                     );
-                    break;
-                case "PAYIN_AUTO_EXPIRE":
-                    await TransactionMonitorService.processPayinAutoExpire(
-                        task.payload.transactionId
+                } catch (error: any) {
+                    logger.error(
+                        {
+                            event: "job.failed",
+                            component: "worker",
+                            jobId: task.id,
+                            type: task.type,
+                            error: error.message,
+                        },
+                        "[BackgroundWorker] Job failed"
                     );
-                    break;
-                case "PAYOUT_STATUS_POLL":
-                    await TransactionMonitorService.processPayoutStatusPoll(
-                        task.payload
-                    );
-                    break;
-                case "SETTLEMENT_VERIFICATION":
-                    await ProviderFeeSettlementService.verifySettlements();
-                    break;
-                default:
-                    logger.warn({ type: task.type }, "[BackgroundWorker] Unknown job type");
+                    await JobQueue.retry(task, error.message);
+                }
             }
-            logger.info({ jobId: task.id }, "[BackgroundWorker] Job completed");
-        } catch (error: any) {
-            logger.error({ jobId: task.id, error: error.message }, "[BackgroundWorker] Job failed");
-            await JobQueue.retry(task, error.message);
-        }
+        );
     }
 
     private static async processWebhookTask(task: WebhookTask) {
-        logger.info({ type: task.type, providerId: task.providerId }, "[BackgroundWorker] Processing Webhook");
-        try {
-            await this.webhookWorkflow.execute(
-                task.type,
-                task.providerId,
-                task.legalEntityId,
-                task.rawBody
-            );
-            logger.info({ type: task.type }, "[BackgroundWorker] Webhook completed");
-        } catch (error: any) {
-            logger.error({ type: task.type, error: error.message }, "[BackgroundWorker] Webhook failed");
-            await WebhookQueue.retry(task, error.message);
-        }
+        await runWithLogContext(
+            {
+                component: "worker",
+                jobType: "WEBHOOK",
+                providerId: task.providerId,
+                legalEntityId: task.legalEntityId,
+            },
+            async () => {
+                logger.info(
+                    {
+                        event: "webhook.process.start",
+                        component: "worker",
+                        type: task.type,
+                        providerId: task.providerId,
+                        legalEntityId: task.legalEntityId,
+                    },
+                    "[BackgroundWorker] Processing Webhook"
+                );
+                try {
+                    await this.webhookWorkflow.execute(
+                        task.type,
+                        task.providerId,
+                        task.legalEntityId,
+                        task.rawBody
+                    );
+                    logger.info(
+                        {
+                            event: "webhook.processed",
+                            component: "worker",
+                            type: task.type,
+                            providerId: task.providerId,
+                            legalEntityId: task.legalEntityId,
+                        },
+                        "[BackgroundWorker] Webhook completed"
+                    );
+                } catch (error: any) {
+                    logger.error(
+                        {
+                            event: "webhook.failed",
+                            component: "worker",
+                            type: task.type,
+                            providerId: task.providerId,
+                            legalEntityId: task.legalEntityId,
+                            error: error.message,
+                        },
+                        "[BackgroundWorker] Webhook failed"
+                    );
+                    await WebhookQueue.retry(task, error.message);
+                }
+            }
+        );
     }
 }

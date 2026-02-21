@@ -1,5 +1,6 @@
 import { Context, Next } from "hono";
 import { Forbidden } from "@/utils/error";
+import { setLogContext } from "@/infra/log-context";
 
 export const extractPaymentIp = async (c: Context, next: Next) => {
     let ip = c.req.header("cf-connecting-ip");
@@ -26,5 +27,6 @@ export const extractPaymentIp = async (c: Context, next: Next) => {
     }
 
     c.set("requestIp", ip);
+    setLogContext({ requestIp: ip });
     await next();
 };

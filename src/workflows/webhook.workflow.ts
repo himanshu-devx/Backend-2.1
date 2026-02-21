@@ -48,10 +48,14 @@ export class WebhookWorkflow {
             "[WebhookWorkflow] Parsed webhook"
         );
 
-        if (!result.transactionId) throw new Error("No transactionId in webhook");
+        if (!result.transactionId && !result.providerTransactionId) {
+            throw new Error("No transaction reference in webhook");
+        }
 
         // 3. Persistent Record & Lock
-        let transaction = await TransactionModel.findOne({ id: result.transactionId });
+        let transaction = result.transactionId
+            ? await TransactionModel.findOne({ id: result.transactionId })
+            : null;
         if (!transaction) {
             const refCandidates = [
                 result.transactionId,

@@ -11,6 +11,7 @@ import {
 import { Unauthorized, Forbidden } from "@/utils/error";
 import { merchantRepository } from "@/repositories/merchant.repository";
 import { adminRepository } from "@/repositories/admin.repository";
+import { setLogContext } from "@/infra/log-context";
 
 interface TokenPayload extends JwtPayload {
   id: string;
@@ -58,6 +59,12 @@ export const authMiddleware: MiddlewareHandler = async (
     c.set("id", decoded.id);
     c.set("role", (decoded.role ?? "UNKNOWN") as UserRoleType);
     if (decoded.email) c.set("email", decoded.email);
+    setLogContext({
+      actorId: decoded.id,
+      actorRole: decoded.role,
+      actorEmail: decoded.email,
+      actorType: category === ROLE_CATEGORY.MERCHANT ? "MERCHANT" : "ADMIN",
+    });
 
     await next();
   } catch (err: any) {

@@ -32,6 +32,8 @@ export class JobQueue {
             await redis.lpush(JOB_QUEUE_KEY, JSON.stringify(fullTask));
             logger.info(
                 {
+                    event: "job.enqueue",
+                    component: "queue",
                     jobId: fullTask.id,
                     jobType: fullTask.type,
                 },
@@ -66,7 +68,13 @@ export class JobQueue {
             const runAt = Date.now() + delayMs;
             await redis.zadd(JOB_DELAYED_KEY, runAt, JSON.stringify(fullTask));
             logger.info(
-                { jobId: fullTask.id, jobType: fullTask.type, delayMs },
+                {
+                    event: "job.enqueue_delayed",
+                    component: "queue",
+                    jobId: fullTask.id,
+                    jobType: fullTask.type,
+                    delayMs,
+                },
                 "[JobQueue] Enqueued delayed job"
             );
             return fullTask.id;
@@ -107,7 +115,13 @@ export class JobQueue {
         if (attempt > maxAttempts) {
             await redis.lpush(JOB_DLQ_KEY, JSON.stringify(updated));
             logger.error(
-                { jobId: task.id, jobType: task.type, attempts: attempt },
+                {
+                    event: "job.dlq",
+                    component: "queue",
+                    jobId: task.id,
+                    jobType: task.type,
+                    attempts: attempt,
+                },
                 `[JobQueue] Job moved to DLQ after ${maxAttempts} attempts`
             );
             return;
@@ -121,7 +135,14 @@ export class JobQueue {
 
         await redis.zadd(JOB_DELAYED_KEY, runAt, JSON.stringify(updated));
         logger.warn(
-            { jobId: task.id, jobType: task.type, attempt, delay },
+            {
+                event: "job.retry",
+                component: "queue",
+                jobId: task.id,
+                jobType: task.type,
+                attempt,
+                delay,
+            },
             `[JobQueue] Retrying job in ${delay}ms`
         );
     }

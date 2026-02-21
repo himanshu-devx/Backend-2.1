@@ -1,5 +1,6 @@
 // src/middleware/context.ts
 import { v4 as uuidv4 } from "uuid";
+import { runWithLogContext } from "@/infra/log-context";
 
 export function contextMiddleware() {
   return async (c: any, next: any) => {
@@ -13,6 +14,8 @@ export function contextMiddleware() {
     c.res.headers.set("x-request-id", requestId);
     c.res.headers.set("x-correlation-id", correlationId);
 
-    await next();
+    return runWithLogContext({ requestId, correlationId }, async () => {
+      await next();
+    });
   };
 }

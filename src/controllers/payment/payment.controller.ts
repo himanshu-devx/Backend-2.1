@@ -475,6 +475,7 @@ export class PaymentController {
         metadata: {
           adminEmail: c.req.header("x-admin-email"),
           reason: body?.reason,
+          date: body?.date,
           error: error instanceof PaymentError ? error.toJSON() : {
             message: error?.message,
             name: error?.name,

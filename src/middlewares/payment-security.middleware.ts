@@ -6,6 +6,7 @@ import { logger } from "@/infra/logger-instance";
 import crypto from "crypto";
 import { decryptSecret, looksLikeArgon2Hash } from "@/utils/secret.util";
 import { ENV } from "@/config/env";
+import { setLogContext } from "@/infra/log-context";
 
 export const paymentSecurityMiddleware = (
     type: "PAYIN" | "PAYOUT" | "STATUS",
@@ -190,6 +191,12 @@ export const paymentSecurityMiddleware = (
     // Attach context
     c.set("merchant", merchant);
     c.set("req_body", body);
+    setLogContext({
+        merchantId: merchant.id,
+        actorId: merchant.id,
+        actorType: "MERCHANT",
+        requestIp: ip,
+    });
 
     await next();
 };
