@@ -4,6 +4,7 @@ import { LedgerTransferService } from '@/services/ledger/ledger-transfer.service
 import { CreateLedgerTransferDTO } from '@/dto/ledger/ledger-transfer.dto';
 import { LedgerOperationService } from '@/services/ledger/ledger-operation.service';
 import { CreateLedgerOperationDTO } from '@/dto/ledger/ledger-operation.dto';
+import { TransactionService } from '@/services/transaction.service';
 
 /**
  * GET /api/admin/ledger/accounts/:accountId/entries
@@ -55,6 +56,33 @@ export const getLedgerEntry = async (c: Context) => {
         return c.json({ success: true, data: entry });
     } catch (error: any) {
         return c.json({ success: false, message: 'Failed to fetch ledger entry', error: error.message }, 500);
+    }
+};
+
+/**
+ * GET /api/admin/ledger/entries/:entryId/transaction
+ */
+export const getTransactionByLedgerEntryId = async (c: Context) => {
+    try {
+        const entryId = c.req.param('entryId');
+        if (!entryId) {
+            return c.json({ success: false, message: 'Entry ID is required' }, 400);
+        }
+
+        const result = await TransactionService.getDetailsByLedgerEntryId(entryId);
+        if (!result.ok) {
+            const message = typeof result.error === 'string'
+                ? result.error
+                : result.error?.message || 'Transaction not found for ledger entry';
+            const status = typeof result.error === 'string'
+                ? 404
+                : (result.error?.status || 404);
+            return c.json({ success: false, message }, status as any);
+        }
+
+        return c.json({ success: true, data: result.value });
+    } catch (error: any) {
+        return c.json({ success: false, message: 'Failed to fetch transaction', error: error.message }, 500);
     }
 };
 

@@ -240,7 +240,7 @@ export class TpipayProvider extends BaseProvider {
           message,
           providerMsg: resp.message,
           transactionId: req.transactionId,
-          providerTransactionId: providerOrderId,
+          providerTransactionId: gatewayOrderId as string || "",
           amount: req.amount,
           error: resp,
         };
@@ -551,10 +551,10 @@ export class TpipayProvider extends BaseProvider {
     const providerTransactionId =
       payload.gateway_order_id ??
       payload.gatewayOrderId ??
+      payload.transaction_id ??
       payload.order_id ??
-      payload.externalTxnId ??
-      payload.transaction_id;
-
+      payload.externalTxnId
+      
     return {
       type: "webhook",
       success: true,

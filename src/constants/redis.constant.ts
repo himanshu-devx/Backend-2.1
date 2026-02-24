@@ -33,4 +33,5 @@ export const RedisKeys = {
   },
   CHANNEL: (providerId: string, legalEntityId: string) =>
     `channel:${providerId}:${legalEntityId}`,
+  PAYIN_INTENT: (transactionId: string) => `payin:intent:${transactionId}`,
 } as const;

@@ -35,6 +35,7 @@ export const TransactionListQuerySchema = ListQuerySchema.extend({
   orderId: z.string().optional(),
   providerRef: z.string().optional(),
   utr: z.string().optional(),
+  ledgerEntryId: z.string().optional(),
   flags: z.string().optional(), // comma-separated list of flags
   startDate: DateStringSchema.optional(),
   endDate: DateStringSchema.optional(),

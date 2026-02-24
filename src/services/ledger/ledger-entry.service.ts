@@ -1,7 +1,7 @@
 import { LedgerService } from './ledger.service';
 import { merchantRepository } from '@/repositories/merchant.repository';
 import { AccountStatement, TrialBalance, BalanceSheet, GeneralLedger, AccountType } from 'fintech-ledger';
-import { getShiftedISTDate } from '@/utils/date.util';
+import { getShiftedISTDate, getISTDayStart, getISTDayEnd, validateDateFormat } from '@/utils/date.util';
 import { toDisplayAmountFromLedger } from '@/utils/money.util';
 import { LedgerUtils } from '@/utils/ledger.utils';
 
@@ -128,11 +128,15 @@ export class LedgerEntryService {
 
         if (status) filteredEntries = filteredEntries.filter((entry: any) => entry.status === status);
         if (startDate) {
-            const start = new Date(startDate);
+            const start = validateDateFormat(startDate)
+                ? getISTDayStart(startDate)
+                : new Date(startDate);
             filteredEntries = filteredEntries.filter((entry: any) => new Date(entry.postedAt || entry.createdAt) >= start);
         }
         if (endDate) {
-            const end = new Date(endDate);
+            const end = validateDateFormat(endDate)
+                ? getISTDayEnd(endDate)
+                : new Date(endDate);
             filteredEntries = filteredEntries.filter((entry: any) => new Date(entry.postedAt || entry.createdAt) <= end);
         }
         if (description) {
@@ -192,6 +196,7 @@ export class LedgerEntryService {
             const side = classifySide(amountValue, normalSide);
             const balanceAfter = balanceByEntryId.get(entry.id);
             const runningBalance = balanceAfter !== undefined ? formatRupees(balanceAfter) : undefined;
+            const metadata = entry.metadata || {};
 
             return {
                 id: entry.id,
@@ -201,7 +206,8 @@ export class LedgerEntryService {
                 type: side,
                 status: entry.status,
                 description: entry.description || '',
-                metadata: entry.metadata || {},
+                metadata,
+                transactionId: metadata?.transactionId,
                 runningBalance,
                 balance: runningBalance,
                 relatedEntries: entry.lines
@@ -264,6 +270,7 @@ export class LedgerEntryService {
         // Fetch lines for statement
         const statementLines = await new AccountStatement().getStatement(normalizedAccountId, limit);
         const entryAmountById = new Map<string, number>();
+        const entryMetaById = new Map<string, any>();
         try {
             const entryLimit = Math.max(limit, statementLines.length || 0);
             const entries = await LedgerService.getEntries(normalizedAccountId, { limit: entryLimit });
@@ -271,6 +278,7 @@ export class LedgerEntryService {
                 const line = entry?.lines?.find((l: any) => l.accountId === normalizedAccountId);
                 if (!line?.amount && line?.amount !== 0) continue;
                 entryAmountById.set(entry.id, toRupeesFromLedger(line.amount));
+                if (entry?.id) entryMetaById.set(entry.id, entry?.metadata || {});
             }
         } catch {
             // Fallback to statement line amounts if entry lookup fails
@@ -291,6 +299,7 @@ export class LedgerEntryService {
                 ? preferredAmount
                 : toRupeesFromLedger(fallbackAmount);
             const side = classifySide(amt, normalSide);
+            const metadata = entryMetaById.get(line.entryId) || {};
             return {
                 date: getShiftedISTDate(line.date),
                 description: line.description,
@@ -298,7 +307,8 @@ export class LedgerEntryService {
                 credit: side === 'CREDIT' ? `${Math.abs(amt).toFixed(2)}` : '0.00',
                 runningBalance: formatRupees(line.balanceAfter),
                 currency: 'INR',
-                entryId: line.entryId
+                entryId: line.entryId,
+                transactionId: metadata?.transactionId
             };
         });
 
@@ -364,9 +374,9 @@ export class LedgerEntryService {
             description: entry.description || '',
             status: entry.status,
             metadata: entry.metadata || {},
-            createdAt: entry.createdAt,
-            postedAt: entry.postedAt,
-            voidedAt: entry.voidedAt || null,
+            createdAt: entry.createdAt ? getShiftedISTDate(entry.createdAt) : entry.createdAt,
+            postedAt: entry.postedAt ? getShiftedISTDate(entry.postedAt) : entry.postedAt,
+            voidedAt: entry.voidedAt ? getShiftedISTDate(entry.voidedAt) : entry.voidedAt || null,
             actorId: entry.actorId || 'system',
             lines: entry.lines?.map((l: any) => ({
                 accountId: l.accountId,

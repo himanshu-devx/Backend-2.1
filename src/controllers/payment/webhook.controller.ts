@@ -1,6 +1,8 @@
 import { Context } from "hono";
 import { logger } from "@/infra/logger-instance";
 import { WebhookQueue } from "@/utils/webhook-queue.util";
+import { getISTDate } from "@/utils/date.util";
+import crypto from "node:crypto";
 
 export class WebhookController {
     /**
@@ -12,12 +14,16 @@ export class WebhookController {
         const providerId = c.req.param("provider");
         const legalEntityId = c.req.param("legalentity") || "";
         const rawBody = await c.req.text();
+        const webhookId = crypto.randomUUID();
 
         logger.info(
             {
+                event: "webhook.received",
+                source: "PROVIDER_WEBHOOK",
                 type,
                 providerId,
                 legalEntityId,
+                webhookId,
                 rawBodyLength: rawBody.length,
                 rawBody,
                 headers: Object.fromEntries(c.req.raw.headers.entries())
@@ -31,6 +37,7 @@ export class WebhookController {
                 type,
                 providerId,
                 legalEntityId,
+                webhookId,
                 rawBody
             });
 
@@ -54,7 +61,7 @@ export class WebhookController {
         const rawBody = await c.req.text();
         const headers = Object.fromEntries(c.req.raw.headers.entries());
         const query = c.req.query();
-        const receivedAt = new Date().toISOString();
+        const receivedAt = getISTDate().toISOString();
 
         logger.info(
             {

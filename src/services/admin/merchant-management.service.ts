@@ -571,14 +571,14 @@ export class MerchantManagementService {
     if (!merchant.apiSecretEnabled) {
       return ok({
         apiSecret: "",
-        apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || new Date(),
+        apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || getISTDate(),
       });
     }
 
     if (!merchant.apiSecretEncrypted) {
       return ok({
         apiSecret: "",
-        apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || new Date(),
+        apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || getISTDate(),
       });
     }
 
@@ -590,7 +590,7 @@ export class MerchantManagementService {
 
     return ok({
       apiSecret: secret,
-      apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || new Date(),
+      apiSecretUpdatedAt: merchant.apiSecretUpdatedAt || getISTDate(),
     });
   }
 

@@ -18,6 +18,8 @@ export type LogContext = {
   legalEntityId?: string;
   pleId?: string;
   component?: string;
+  source?: string;
+  webhookId?: string;
 };
 
 const storage = new AsyncLocalStorage<LogContext>();

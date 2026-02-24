@@ -3,6 +3,8 @@ import { CacheService } from "@/services/common/cache.service";
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
+import { MerchantCallbackService } from "@/services/payment/merchant-callback.service";
+import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
 import { NotFound } from "@/utils/error";
 import { ProviderClient } from "@/services/provider-config/provider-client.service";
 
@@ -51,18 +53,20 @@ export class StatusSyncWorkflow {
 
         // 4. State Transition (Workflow Step)
         if (result.status && result.status !== transaction.status) {
+            const oldStatus = transaction.status;
             transaction.status = result.status as any;
             transaction.utr = result.utr || transaction.utr;
             transaction.events.push({
                 type: "STATUS_SYNCED",
                 timestamp: getISTDate(),
-                payload: { old: transaction.status, new: result.status }
+                payload: { old: oldStatus, new: result.status }
             });
             logger.info(
                 {
                     orderId: transaction.orderId,
                     transactionId: transaction.id,
-                    status: transaction.status
+                    status: transaction.status,
+                    source: "STATUS_SYNC"
                 },
                 "[StatusSync] Status updated"
             );
@@ -80,6 +84,14 @@ export class StatusSyncWorkflow {
             }
 
             await transaction.save();
+            MerchantCallbackService.notify(transaction, { source: "STATUS_SYNC" });
+            if (
+                transaction.type === "PAYOUT" &&
+                transaction.status !== TransactionStatus.PENDING &&
+                transaction.status !== TransactionStatus.PROCESSING
+            ) {
+                await TransactionMonitorService.stopPayoutPolling(transaction.id);
+            }
         }
 
         return transaction;

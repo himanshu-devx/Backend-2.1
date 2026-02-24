@@ -19,7 +19,7 @@ import {
   UpdateAdminProfileSchema,
 } from "@/dto/admin/admin.dto";
 import { ListQuerySchema, TransactionListQuerySchema } from "@/dto/common.dto";
-import { ReverseTransactionSchema } from "@/dto/admin/transaction.dto";
+import { ReverseTransactionSchema, ReverseLedgerEntriesSchema, AdminTransactionActionSchema } from "@/dto/admin/transaction.dto";
 
 const adminManageRoutes = new Hono();
 
@@ -86,6 +86,16 @@ adminManageRoutes.get(
 );
 
 adminManageRoutes.get(
+  "/transactions/by-ledger/:entryId",
+  authorizeRoles([
+    ADMIN_ROLES.SUPER_ADMIN,
+    ADMIN_ROLES.ADMIN,
+    ADMIN_ROLES.SUPPORT,
+  ]),
+  handler(TransactionController.getDetailsByLedgerEntryId)
+);
+
+adminManageRoutes.get(
   "/transactions/:id",
   authorizeRoles([
     ADMIN_ROLES.SUPER_ADMIN,
@@ -103,6 +113,36 @@ adminManageRoutes.post(
   ]),
   validateBody(ReverseTransactionSchema),
   handler(TransactionController.reverseAdmin)
+);
+
+adminManageRoutes.post(
+  "/transactions/:id/reverse-ledger",
+  authorizeRoles([
+    ADMIN_ROLES.SUPER_ADMIN,
+    ADMIN_ROLES.ADMIN,
+  ]),
+  validateBody(ReverseLedgerEntriesSchema),
+  handler(TransactionController.reverseLedgerAdmin)
+);
+
+adminManageRoutes.post(
+  "/transactions/:id/sync-status",
+  authorizeRoles([
+    ADMIN_ROLES.SUPER_ADMIN,
+    ADMIN_ROLES.ADMIN,
+  ]),
+  validateBody(AdminTransactionActionSchema),
+  handler(TransactionController.syncStatusAdmin)
+);
+
+adminManageRoutes.post(
+  "/transactions/:id/resend-webhook",
+  authorizeRoles([
+    ADMIN_ROLES.SUPER_ADMIN,
+    ADMIN_ROLES.ADMIN,
+  ]),
+  validateBody(AdminTransactionActionSchema),
+  handler(TransactionController.resendWebhookAdmin)
 );
 
 // Dynamic :id routes come after specific routes

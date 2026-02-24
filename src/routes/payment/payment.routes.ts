@@ -10,6 +10,10 @@ import { ManualStatusUpdateSchema } from "@/dto/payment/manual-status.dto";
 import { ManualStatusSyncSchema } from "@/dto/payment/manual-status-sync.dto";
 import { ManualExpirePendingSchema } from "@/dto/payment/manual-expire.dto";
 import { ManualProviderFeeSettlementSchema } from "@/dto/payment/manual-provider-fee.dto";
+import QRCode from "qrcode";
+import { redis } from "@/infra/redis-instance";
+import { RedisKeys } from "@/constants/redis.constant";
+import { BadRequest, InternalError, NotFound } from "@/utils/error";
 
 const paymentRoutes = new Hono();
 const controller = new PaymentController();
@@ -120,5 +124,27 @@ paymentRoutes.post(
     validateBody(ManualProviderFeeSettlementSchema),
     (c) => controller.manualProviderFeeSettlement(c)
 );
+
+// Public endpoint: no auth/IP validation
+paymentRoutes.get("/upi/:txnId", async (c) => {
+    const txnId = c.req.param("txnId");
+    if (!txnId) throw BadRequest("Transaction ID required");
+
+    const upiIntent = await redis.get(RedisKeys.PAYIN_INTENT(txnId));
+    if (!upiIntent) throw NotFound("UPI intent not found");
+
+    try {
+        const qrBase64 = await QRCode.toDataURL(upiIntent);
+        return c.html(`
+            <html>
+                <body>
+                    <img alt="Payment QR Code" src="${qrBase64}" />
+                </body>
+            </html>
+        `);
+    } catch (error: any) {
+        throw InternalError("QR generation failed");
+    }
+});
 
 export default paymentRoutes;

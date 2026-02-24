@@ -12,10 +12,19 @@ export class WebhookWorkflow {
         type: "PAYIN" | "PAYOUT" | "COMMON",
         providerId: string,
         legalEntityId: string,
-        rawBody: string
+        rawBody: string,
+        webhookId?: string
     ) {
         logger.info(
-            { type, providerId, legalEntityId, rawBodyLength: rawBody.length },
+            {
+                event: "webhook.process",
+                source: "WEBHOOK",
+                type,
+                providerId,
+                legalEntityId,
+                webhookId,
+                rawBodyLength: rawBody.length
+            },
             "[WebhookWorkflow] Processing webhook"
         );
 
@@ -38,9 +47,12 @@ export class WebhookWorkflow {
 
         logger.info(
             {
+                event: "webhook.parsed",
+                source: "WEBHOOK",
                 type,
                 providerId,
                 legalEntityId,
+                webhookId,
                 transactionId: result.transactionId,
                 providerTransactionId: result.providerTransactionId,
                 status: result.status
@@ -81,6 +93,11 @@ export class WebhookWorkflow {
             throw new Error(`Txn ${result.transactionId} not found`);
         }
 
+        const resolvedType =
+            type === "COMMON"
+                ? (transaction.type as "PAYIN" | "PAYOUT")
+                : type;
+
         if (transaction.status !== TransactionStatus.PENDING) {
             transaction.events.push({
                 type: "WEBHOOK_DUPLICATE",
@@ -88,11 +105,18 @@ export class WebhookWorkflow {
                 payload: result
             });
             await transaction.save();
-            if (type === "PAYOUT") {
+            if (resolvedType === "PAYOUT") {
                 await TransactionMonitorService.stopPayoutPolling(transaction.id);
             }
             logger.info(
-                { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
+                {
+                    event: "webhook.duplicate",
+                    source: "WEBHOOK",
+                    webhookId,
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    status: transaction.status
+                },
                 "[WebhookWorkflow] Transaction already processed"
             );
             return { transaction, alreadyProcessed: true };
@@ -108,9 +132,9 @@ export class WebhookWorkflow {
                 transaction.events.push({ type: "WEBHOOK_SUCCESS", timestamp: getISTDate(), payload: result });
 
                 // Execute Financial Transition
-                if (type === "PAYIN") {
+                if (resolvedType === "PAYIN") {
                     await PaymentLedgerService.processPayinCredit(transaction);
-                } else {
+                } else if (resolvedType === "PAYOUT") {
                     await PaymentLedgerService.commitPayout(transaction);
                 }
             } else if (result.status === "FAILED") {
@@ -118,7 +142,7 @@ export class WebhookWorkflow {
                 transaction.error = result.message || "Provider reported failure";
                 transaction.events.push({ type: "WEBHOOK_FAILED", timestamp: getISTDate(), payload: result });
 
-                if (type === "PAYOUT") {
+                if (resolvedType === "PAYOUT") {
                     await PaymentLedgerService.voidPayout(transaction);
                 }
             }
@@ -126,13 +150,20 @@ export class WebhookWorkflow {
             await transaction.save();
 
             // 5. Outbound Notification
-            MerchantCallbackService.notify(transaction);
-            if (type === "PAYOUT") {
+            MerchantCallbackService.notify(transaction, { source: "WEBHOOK", webhookId });
+            if (resolvedType === "PAYOUT") {
                 await TransactionMonitorService.stopPayoutPolling(transaction.id);
             }
 
             logger.info(
-                { transactionId: transaction.id, orderId: transaction.orderId, status: transaction.status },
+                {
+                    event: "webhook.updated",
+                    source: "WEBHOOK",
+                    webhookId,
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    status: transaction.status
+                },
                 "[WebhookWorkflow] Transaction updated from webhook"
             );
 
@@ -141,6 +172,9 @@ export class WebhookWorkflow {
         } catch (error: any) {
             logger.error(
                 {
+                    event: "webhook.error",
+                    source: "WEBHOOK",
+                    webhookId,
                     transactionId: transaction.id,
                     orderId: transaction.orderId,
                     error: error.message

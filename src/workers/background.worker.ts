@@ -136,6 +136,8 @@ export class BackgroundWorker {
                 jobType: "WEBHOOK",
                 providerId: task.providerId,
                 legalEntityId: task.legalEntityId,
+                source: "WEBHOOK",
+                webhookId: task.webhookId,
             },
             async () => {
                 logger.info(
@@ -145,6 +147,9 @@ export class BackgroundWorker {
                         type: task.type,
                         providerId: task.providerId,
                         legalEntityId: task.legalEntityId,
+                        webhookId: task.webhookId,
+                        attempt: task.attempt,
+                        receivedAt: task.receivedAt,
                     },
                     "[BackgroundWorker] Processing Webhook"
                 );
@@ -153,7 +158,8 @@ export class BackgroundWorker {
                         task.type,
                         task.providerId,
                         task.legalEntityId,
-                        task.rawBody
+                        task.rawBody,
+                        task.webhookId
                     );
                     logger.info(
                         {
@@ -162,6 +168,7 @@ export class BackgroundWorker {
                             type: task.type,
                             providerId: task.providerId,
                             legalEntityId: task.legalEntityId,
+                            webhookId: task.webhookId,
                         },
                         "[BackgroundWorker] Webhook completed"
                     );
@@ -173,6 +180,7 @@ export class BackgroundWorker {
                             type: task.type,
                             providerId: task.providerId,
                             legalEntityId: task.legalEntityId,
+                            webhookId: task.webhookId,
                             error: error.message,
                         },
                         "[BackgroundWorker] Webhook failed"

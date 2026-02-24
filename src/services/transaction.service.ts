@@ -13,6 +13,8 @@ import { getShiftedISTDate, getISTDate } from "@/utils/date.util";
 import { LedgerService } from "@/services/ledger/ledger.service";
 import { TransactionStatus } from "@/models/transaction.model";
 import { mapTransactionAmountsToDisplay } from "@/utils/money.util";
+import { paymentService } from "@/services/payment/payment.service";
+import { MerchantCallbackService } from "@/services/payment/merchant-callback.service";
 
 export interface TransactionListFilter extends ListQueryDTO {
   merchantId?: string; // Kept for alias
@@ -23,6 +25,7 @@ export interface TransactionListFilter extends ListQueryDTO {
   orderId?: string;
   providerRef?: string;
   utr?: string;
+  ledgerEntryId?: string;
   flags?: string; // comma-separated
   startDate?: string;
   endDate?: string;
@@ -31,6 +34,20 @@ export interface TransactionListFilter extends ListQueryDTO {
 }
 
 export class TransactionService {
+  private static buildLedgerEntryQuery(ledgerEntryId: string) {
+    return {
+      $or: [
+        { "meta.ledgerEntryId": ledgerEntryId },
+        { "meta.ledgerCommitEntryId": ledgerEntryId },
+        { "meta.ledgerHoldEntryId": ledgerEntryId },
+        { "meta.manualLedgerEntries.id": ledgerEntryId },
+        { "meta.ledgerReverseEntryId": ledgerEntryId },
+        { "meta.ledgerReverseEntryIds.reverseEntryId": ledgerEntryId },
+        { "meta.ledgerReverseEntryIds.entryId": ledgerEntryId },
+      ],
+    };
+  }
+
   /**
    * List transactions with dynamic filtering and pagination
    */
@@ -62,6 +79,7 @@ export class TransactionService {
       orderId,
       providerRef,
       utr,
+      ledgerEntryId,
       sort,
       category,
       flags,
@@ -73,6 +91,9 @@ export class TransactionService {
     if (merchantId) query.merchantId = merchantId;
     if (legalEntityId) query.legalEntityId = legalEntityId;
     if (utr) query.utr = utr;
+    if (ledgerEntryId) {
+      Object.assign(query, this.buildLedgerEntryQuery(ledgerEntryId));
+    }
 
     // Category Filter overrides specific type filter if present
     if (category) {
@@ -115,7 +136,7 @@ export class TransactionService {
       } catch (error: any) {
         return err(new AppError(error.message || "Invalid date format. Expected YYYY-MM-DD", { status: 400 }));
       }
-    } else {
+    } else if (!ledgerEntryId) {
       // Default to Today IST
       const { getTodayRangeIST } = await import("@/utils/date.util");
       const { start, end } = getTodayRangeIST();
@@ -214,6 +235,29 @@ export class TransactionService {
     });
   }
 
+  static async findByLedgerEntryId(
+    ledgerEntryId: string,
+    scope?: { merchantId?: string }
+  ): Promise<{ id: string } | null> {
+    if (!ledgerEntryId) return null;
+    const query: any = this.buildLedgerEntryQuery(ledgerEntryId);
+    if (scope?.merchantId) {
+      query.merchantId = scope.merchantId;
+    }
+    return TransactionModel.findOne(query).select("id").lean<{ id: string }>();
+  }
+
+  static async getDetailsByLedgerEntryId(
+    ledgerEntryId: string,
+    scope?: { merchantId?: string }
+  ): Promise<Result<TransactionDocument, HttpError>> {
+    const txn = await this.findByLedgerEntryId(ledgerEntryId, scope);
+    if (!txn) {
+      return err(NotFound("Transaction not found for ledger entry"));
+    }
+    return this.getDetails(txn.id, scope);
+  }
+
   /**
    * Get single transaction details
    */
@@ -280,6 +324,10 @@ export class TransactionService {
       mapTransactionAmountsToDisplay({
         ...txn,
         createdAt: getShiftedISTDate(txn.createdAt),
+        updatedAt: txn.updatedAt ? getShiftedISTDate(txn.updatedAt) : txn.updatedAt,
+        // insertedDate is already stored as shifted IST (getISTDate) for backdated entries.
+        // Do not shift again to avoid double-offset.
+        insertedDate: (txn as any).insertedDate,
       } as any)
     );
   }
@@ -358,5 +406,208 @@ export class TransactionService {
       ledgerEntryId: entryId,
       ledgerReverseEntryId: reverseEntryId,
     });
+  }
+
+  /**
+   * Reverse ledger entries for any transaction type without changing transaction status.
+   */
+  static async reverseLedgerEntries(
+    id: string,
+    options: {
+      ledgerEntryIds?: string[];
+      includePrimary?: boolean;
+      includeManual?: boolean;
+      reason?: string;
+      dryRun?: boolean;
+    },
+    actor: { id: string; email?: string; role?: string }
+  ): Promise<Result<any, HttpError>> {
+    const txn = await TransactionModel.findOne({ id });
+    if (!txn) return err(NotFound("Transaction not found"));
+
+    const metaGet = (key: string) => {
+      if ((txn.meta as any)?.get) return (txn.meta as any).get(key);
+      return (txn.meta as any)?.[key];
+    };
+    const metaSet = (key: string, value: any) => {
+      if ((txn.meta as any)?.set) {
+        (txn.meta as any).set(key, value);
+        return;
+      }
+      (txn.meta as any)[key] = value;
+    };
+
+    const includePrimary = options.includePrimary !== false;
+    const includeManual = options.includeManual !== false;
+
+    const entryIds = new Set<string>();
+    const skipped: Array<{ entryId: string; reason: string }> = [];
+
+    if (options.ledgerEntryIds?.length) {
+      options.ledgerEntryIds.forEach((id) => entryIds.add(id));
+    } else {
+      if (includePrimary) {
+        const alreadyReversed = !!metaGet("ledgerReversed");
+        const primary =
+          metaGet("ledgerEntryId") ||
+          metaGet("ledgerCommitEntryId") ||
+          metaGet("ledgerHoldEntryId");
+        if (primary) {
+          if (alreadyReversed) {
+            skipped.push({ entryId: primary, reason: "ledgerReversed=true" });
+          } else {
+            entryIds.add(primary);
+          }
+        }
+      }
+
+      if (includeManual) {
+        const manual = (metaGet("manualLedgerEntries") || []) as Array<{
+          id: string;
+          action?: string;
+        }>;
+        for (const entry of manual) {
+          const action = (entry?.action || "").toUpperCase();
+          if (action.includes("REVERSE")) continue;
+          entryIds.add(entry.id);
+        }
+      }
+    }
+
+    if (entryIds.size === 0 && skipped.length > 0 && !options.ledgerEntryIds?.length) {
+      return ok({
+        transactionId: txn.id,
+        status: txn.status,
+        reversed: [],
+        failed: [],
+        skipped,
+        note: "No eligible ledger entries to reverse",
+      });
+    }
+
+    if (entryIds.size === 0) {
+      return err(
+        BadRequest(
+          "No ledger entries found to reverse. Provide ledgerEntryIds or ensure transaction has ledger entries."
+        )
+      );
+    }
+
+    const candidates = [...entryIds];
+    if (options.dryRun) {
+      return ok({
+        transactionId: txn.id,
+        dryRun: true,
+        ledgerEntryIds: candidates,
+      });
+    }
+
+    const reversed: Array<{ entryId: string; reverseEntryId: string }> = [];
+    const failed: Array<{ entryId: string; error: string }> = [];
+
+    for (const entryId of candidates) {
+      try {
+        const reverseEntryId = await LedgerService.reverse(
+          entryId,
+          actor.email || actor.id || "system"
+        );
+        reversed.push({ entryId, reverseEntryId });
+      } catch (error: any) {
+        failed.push({ entryId, error: error?.message || "Reverse failed" });
+      }
+    }
+
+    const existingReversals = metaGet("ledgerReverseEntryIds") || [];
+    const updatedReversals = [
+      ...existingReversals,
+      ...reversed.map((r) => ({
+        entryId: r.entryId,
+        reverseEntryId: r.reverseEntryId,
+        timestamp: getISTDate(),
+        reason: options.reason,
+      })),
+    ];
+    metaSet("ledgerReverseEntryIds", updatedReversals);
+
+    txn.events.push({
+      type: "LEDGER_ENTRIES_REVERSED",
+      timestamp: getISTDate(),
+      payload: {
+        ledgerEntryIds: candidates,
+        reversed,
+        failed,
+        skipped,
+        reason: options.reason,
+        actor: {
+          id: actor.id,
+          email: actor.email,
+          role: actor.role,
+        },
+      },
+    });
+
+    await txn.save();
+
+    return ok({
+      transactionId: txn.id,
+      status: txn.status,
+      reversed,
+      failed,
+      skipped,
+    });
+  }
+
+  /**
+   * Admin: Sync status from provider for a transaction (no status change if still pending).
+   */
+  static async syncStatus(
+    id: string,
+    actor: { id: string; email?: string; role?: string },
+    options?: { confirm?: boolean }
+  ): Promise<Result<any, HttpError>> {
+    try {
+      const updated = await paymentService.manualStatusSync(
+        { transactionId: id, confirm: !!options?.confirm },
+        actor.email || actor.id || "system"
+      );
+      return ok(updated);
+    } catch (error: any) {
+      return err(
+        new AppError(error?.message || "Status sync failed", {
+          status: 500,
+          details: { transactionId: id },
+        })
+      );
+    }
+  }
+
+  /**
+   * Admin: Resend merchant callback webhook for a transaction.
+   */
+  static async resendWebhook(
+    id: string,
+    reason: string | undefined,
+    actor: { id: string; email?: string; role?: string }
+  ): Promise<Result<any, HttpError>> {
+    const txn = await TransactionModel.findOne({ id });
+    if (!txn) return err(NotFound("Transaction not found"));
+
+    MerchantCallbackService.notify(txn, { source: "ADMIN_RESEND" });
+
+    txn.events.push({
+      type: "ADMIN_RESEND_WEBHOOK",
+      timestamp: getISTDate(),
+      payload: {
+        reason,
+        actor: {
+          id: actor.id,
+          email: actor.email,
+          role: actor.role,
+        },
+      },
+    });
+    await txn.save();
+
+    return ok({ transactionId: txn.id, status: txn.status, resent: true });
   }
 }

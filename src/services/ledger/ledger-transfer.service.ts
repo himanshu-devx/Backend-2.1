@@ -67,11 +67,16 @@ export class LedgerTransferService {
     throw BadRequest("Invalid account reference provided");
   }
 
-  private static parseValueDate(valueDate?: string): Date | undefined {
-    if (!valueDate) return undefined;
+  private static parseValueDate(
+    valueDate?: string
+  ): { valueDate?: Date; valueDateKey?: string } {
+    if (!valueDate) return {};
 
     if (validateDateFormat(valueDate)) {
-      return getISTDayStart(valueDate);
+      return {
+        valueDate: getISTDayStart(valueDate),
+        valueDateKey: valueDate,
+      };
     }
 
     const parsed = new Date(valueDate);
@@ -81,7 +86,9 @@ export class LedgerTransferService {
       );
     }
 
-    return getShiftedISTDate(parsed);
+    const shifted = getShiftedISTDate(parsed);
+    const valueDateKey = shifted.toISOString().split("T")[0];
+    return { valueDate: shifted, valueDateKey };
   }
 
   private static getTransactionPrefix(): string {
@@ -93,6 +100,27 @@ export class LedgerTransferService {
       .toUpperCase();
     if (!prefix) prefix = "TXN";
     return prefix;
+  }
+
+  private static buildNarration(
+    data: CreateLedgerTransferDTO,
+    transactionId: string
+  ): string {
+    const parts: string[] = [];
+
+    const type = data.type ?? TransactionType.INTERNAL_TRANSFER;
+    parts.push(`TYPE:${type}`);
+    parts.push(`TRANSACTION_ID:${transactionId}`);
+    if (data.paymentMode) parts.push(`MODE:${data.paymentMode}`);
+    if (data.utr) parts.push(`UTR:${data.utr}`);
+    if (data.merchantId) parts.push(`MERCHANT:${data.merchantId}`);
+    if (data.providerId) parts.push(`PROVIDER:${data.providerId}`);
+    if (data.legalEntityId) parts.push(`LE:${data.legalEntityId}`);
+
+    const party = data.party as any;
+    if (party?.name) parts.push(`PARTY:${party.name}`);
+
+    return parts.join(" | ");
   }
 
   static async createTransfer(
@@ -107,25 +135,25 @@ export class LedgerTransferService {
       throw BadRequest("Source and destination accounts must be different");
     }
 
-    const valueDate = this.parseValueDate(data.valueDate);
+    const now = getISTDate();
+    const nowKey = now.toISOString().split("T")[0];
+    const { valueDate, valueDateKey } = this.parseValueDate(data.valueDate);
     if (data.isBackDated && !valueDate) {
       throw BadRequest("isBackDated=true requires valueDate");
     }
-
+    if (valueDateKey && valueDateKey > nowKey) {
+      throw BadRequest("valueDate cannot be in the future");
+    }
     const inferredBackDate =
-      valueDate && valueDate.getTime() < getISTDate().getTime();
-    const isBackDated = data.isBackDated ?? inferredBackDate ?? false;
+      !!valueDateKey && valueDateKey < nowKey;
+    // Auto-detect backdated entries from valueDate, even if isBackDated not provided.
+    const isBackDated = data.isBackDated === true || inferredBackDate;
 
     const txId = await generateCustomId(
       this.getTransactionPrefix(),
       "transaction"
     );
     const orderId = data.orderId ?? (await generateCustomId("ORD", "order"));
-
-    const narration =
-      data.narration ||
-      data.remarks ||
-      `${data.type ?? TransactionType.INTERNAL_TRANSFER} Transfer`;
 
     const fromParts = LedgerUtils.parseAccountId(fromAccountId);
     const toParts = LedgerUtils.parseAccountId(toAccountId);
@@ -168,6 +196,11 @@ export class LedgerTransferService {
           : undefined);
     }
 
+    const narration = this.buildNarration(
+      { ...data, merchantId, providerId, legalEntityId },
+      txId
+    );
+
     const party = data.party ? { ...data.party } : { type: TransactionPartyType.SYSTEM };
     if ("bankAccountId" in party) {
       delete (party as any).bankAccountId;
@@ -193,7 +226,8 @@ export class LedgerTransferService {
       remarks: data.remarks ?? data.narration,
       party,
       isBackDated,
-      insertedDate: isBackDated ? valueDate : undefined,
+      createdAt: isBackDated && valueDate ? valueDate : undefined,
+      insertedDate: isBackDated ? now : undefined,
       meta: {
         ...data.metadata,
         fromAccountId,

@@ -216,6 +216,9 @@ export class ReportService {
         const endStr = period.end.toISOString().split('T')[0];
         const generatedAt = getISTDate().toISOString().replace('T', ' ').split('.')[0];
 
+        const narrationKeys = ["TYPE", "TRANSACTION_ID", "MODE", "UTR", "MERCHANT", "PROVIDER", "LE", "PARTY"];
+        const narrationTemplate = narrationKeys.join(" | ");
+
         const sections = [
             `"--- ${ENV.APP_BRAND_NAME.toUpperCase()} - OFFICIAL ACCOUNT STATEMENT ---"`,
             `"ACCOUNT ID:","${accountId}"`,
@@ -230,12 +233,17 @@ export class ReportService {
             `"Closing Balance:","${closingBalance}"`,
             `""`,
             `"--------------------------------------------------------------------------------"`,
+            `"NARRATION FIELDS:","${narrationTemplate}"`,
             `"DATE","NARRATION","TRANSACTION ID","DEBIT","CREDIT","RUNNING BALANCE"`
         ];
 
         const dataRows = lines.map((line: any) => {
             const dateStr = line.date.toISOString().replace('T', ' ').split('.')[0];
-            return `"${dateStr}","${line.description}","${line.entryId}","${line.debit}","${line.credit}","${line.runningBalance}"`;
+            const parsed = this.parseNarration(line.description, narrationKeys);
+            const narration = parsed.useTemplate
+                ? narrationKeys.map(k => parsed.values[k] || "").join(" | ")
+                : line.description;
+            return `"${dateStr}","${narration}","${line.entryId}","${line.debit}","${line.credit}","${line.runningBalance}"`;
         });
 
         const footer = [
@@ -246,6 +254,27 @@ export class ReportService {
         ];
 
         return [...sections, ...dataRows, ...footer].join("\n");
+    }
+
+    private static parseNarration(
+        description: string,
+        keys: string[]
+    ): { useTemplate: boolean; values: Record<string, string> } {
+        if (!description) return { useTemplate: false, values: {} };
+        const values: Record<string, string> = {};
+        const parts = description.split("|").map(p => p.trim()).filter(Boolean);
+        let matched = 0;
+        for (const part of parts) {
+            const idx = part.indexOf(":");
+            if (idx <= 0) continue;
+            const key = part.slice(0, idx).trim();
+            const val = part.slice(idx + 1).trim();
+            if (keys.includes(key)) {
+                values[key] = val;
+                matched += 1;
+            }
+        }
+        return { useTemplate: matched > 0, values };
     }
 
     private static convertToCsv(data: any[], headers: string[]): string {

@@ -11,6 +11,7 @@ export interface WebhookTask {
     providerId: string;
     legalEntityId: string;
     rawBody: string;
+    webhookId?: string;
     receivedAt: Date;
     attempt?: number;
     maxAttempts?: number;
@@ -37,6 +38,7 @@ export class WebhookQueue {
                     type: task.type,
                     providerId: task.providerId,
                     legalEntityId: task.legalEntityId,
+                    webhookId: task.webhookId,
                     rawBodyLength: task.rawBody?.length || 0
                 },
                 "[WebhookQueue] Enqueued webhook"
@@ -83,6 +85,7 @@ export class WebhookQueue {
                     type: task.type,
                     providerId: task.providerId,
                     legalEntityId: task.legalEntityId,
+                    webhookId: task.webhookId,
                     attempts: attempt,
                 },
                 `[WebhookQueue] Task moved to DLQ after ${attempt - 1} retries`
@@ -104,6 +107,7 @@ export class WebhookQueue {
                 type: task.type,
                 providerId: task.providerId,
                 legalEntityId: task.legalEntityId,
+                webhookId: task.webhookId,
                 attempt,
                 maxAttempts,
                 delay,

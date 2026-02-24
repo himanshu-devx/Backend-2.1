@@ -53,6 +53,13 @@ adminLedgerRoutes.get(
     handler(ledgerController.getLedgerEntry)
 );
 
+// Get transaction by ledger entry ID
+adminLedgerRoutes.get(
+    '/entries/:entryId/transaction',
+    authorizeRoles([ADMIN_ROLES.SUPER_ADMIN, ADMIN_ROLES.ADMIN]),
+    handler(ledgerController.getTransactionByLedgerEntryId)
+);
+
 // Reports
 adminLedgerRoutes.get(
     '/reports/trial-balance',

@@ -16,6 +16,10 @@ import { TpsService } from "@/services/common/tps.service";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { mapFeeDetailToStorage, toDisplayAmount, toStorageAmount } from "@/utils/money.util";
 import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
+import { redis } from "@/infra/redis-instance";
+import { RedisKeys } from "@/constants/redis.constant";
+
+const UPI_INTENT_TTL_SECONDS = 30 * 60;
 
 export class PayinWorkflow extends BasePaymentWorkflow<
     InitiatePayinDto,
@@ -139,6 +143,25 @@ export class PayinWorkflow extends BasePaymentWorkflow<
             },
             "[PayinWorkflow] Transaction persisted"
         );
+
+        if (gatewayResult?.result) {
+            try {
+                await redis.setex(
+                    RedisKeys.PAYIN_INTENT(this.generatedId),
+                    UPI_INTENT_TTL_SECONDS,
+                    gatewayResult.result
+                );
+            } catch (error: any) {
+                logger.warn(
+                    {
+                        orderId: dto.orderId,
+                        transactionId: this.generatedId,
+                        error: error?.message
+                    },
+                    "[PayinWorkflow] Failed to cache UPI intent"
+                );
+            }
+        }
     }
 
     protected async gatewayCall(dto: InitiatePayinDto): Promise<ProviderPayinResult> {

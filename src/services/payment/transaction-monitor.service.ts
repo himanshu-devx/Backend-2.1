@@ -9,11 +9,12 @@ import { logger } from "@/infra/logger-instance";
 import { ENV } from "@/config/env";
 import { IST_OFFSET_MS } from "@/constants/common.constant";
 import { redis } from "@/infra/redis-instance";
+import { TransactionType } from "@/constants/transaction.constant";
 
 const PAYIN_EXPIRE_DELAY_MS = Math.max(1, ENV.PAYIN_AUTO_EXPIRE_MINUTES || 30) * 60 * 1000;
 const PAYOUT_POLL_INTERVAL_MS = 5 * 60 * 1000;
 const PAYOUT_POLL_WINDOW_MS = 30 * 60 * 1000;
-const PAYOUT_POLL_IMMEDIATE_DELAY_MS = 30 * 1000;
+const PAYOUT_POLL_IMMEDIATE_DELAY_MS = 1 * 60 * 1000;
 const PAYOUT_POLL_MAX_ATTEMPTS = Math.floor(PAYOUT_POLL_WINDOW_MS / PAYOUT_POLL_INTERVAL_MS);
 const PAYOUT_POLL_TTL_SECONDS = 2 * 24 * 60 * 60;
 
@@ -76,12 +77,41 @@ export class TransactionMonitorService {
         });
         await transaction.save();
 
-        MerchantCallbackService.notify(transaction);
+        MerchantCallbackService.notify(transaction, { source: "AUTO_EXPIRE" });
 
         logger.info(
-            { transactionId: transaction.id, orderId: transaction.orderId },
+            {
+                event: "payin.auto_expire",
+                source: "AUTO_EXPIRE",
+                transactionId: transaction.id,
+                orderId: transaction.orderId
+            },
             "[TransactionMonitor] Payin auto-expired"
         );
+    }
+
+    static async sweepExpiredPayins(limit: number = 500) {
+        const cutoff = new Date(Date.now() - PAYIN_EXPIRE_DELAY_MS);
+        const pending = await TransactionModel.find({
+            type: TransactionType.PAYIN,
+            status: { $in: [TransactionStatus.PENDING, TransactionStatus.PROCESSING] },
+            createdAt: { $lte: cutoff }
+        })
+            .select({ id: 1 })
+            .limit(limit);
+
+        let expired = 0;
+        for (const txn of pending) {
+            await this.processPayinAutoExpire(txn.id);
+            expired += 1;
+        }
+
+        logger.info(
+            { cutoff, scanned: pending.length, expired },
+            "[TransactionMonitor] Payin expiry sweep completed"
+        );
+
+        return { cutoff, scanned: pending.length, expired };
     }
 
     static async processPayoutStatusPoll(payload: PayoutPollPayload) {
@@ -108,6 +138,8 @@ export class TransactionMonitorService {
 
         logger.info(
             {
+                event: "payout.status_poll.start",
+                source: "STATUS_POLL",
                 transactionId: transaction.id,
                 orderId: transaction.orderId,
                 providerId: ple.providerId,
@@ -142,8 +174,20 @@ export class TransactionMonitorService {
             });
             await PaymentLedgerService.commitPayout(transaction);
             await transaction.save();
-            MerchantCallbackService.notify(transaction);
+            MerchantCallbackService.notify(transaction, { source: "STATUS_POLL" });
             await this.stopPayoutPolling(transaction.id);
+            logger.info(
+                {
+                    event: "payout.status_poll.update",
+                    source: "STATUS_POLL",
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    status: transaction.status,
+                    providerId: ple.providerId,
+                    legalEntityId: ple.legalEntityId
+                },
+                "[TransactionMonitor] Payout updated from status poll"
+            );
             return;
         }
 
@@ -160,8 +204,20 @@ export class TransactionMonitorService {
             });
             await PaymentLedgerService.voidPayout(transaction);
             await transaction.save();
-            MerchantCallbackService.notify(transaction);
+            MerchantCallbackService.notify(transaction, { source: "STATUS_POLL" });
             await this.stopPayoutPolling(transaction.id);
+            logger.info(
+                {
+                    event: "payout.status_poll.update",
+                    source: "STATUS_POLL",
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    status: transaction.status,
+                    providerId: ple.providerId,
+                    legalEntityId: ple.legalEntityId
+                },
+                "[TransactionMonitor] Payout updated from status poll"
+            );
             return;
         }
 

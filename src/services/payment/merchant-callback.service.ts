@@ -8,7 +8,10 @@ import { getISTDate } from "@/utils/date.util";
 import type { TransactionDocument } from "@/models/transaction.model";
 
 export class MerchantCallbackService {
-    static async notify(transaction: TransactionDocument) {
+    static async notify(
+        transaction: TransactionDocument,
+        options?: { source?: string; webhookId?: string }
+    ) {
         if (!transaction?.merchantId) return;
         const merchant = await CacheService.getMerchant(transaction.merchantId);
         if (!merchant) return;
@@ -57,8 +60,34 @@ export class MerchantCallbackService {
             }
         }
 
+        logger.info(
+            {
+                event: "callback.send",
+                source: options?.source,
+                webhookId: options?.webhookId,
+                merchantId: merchant.id,
+                transactionId: transaction.id,
+                orderId: transaction.orderId,
+                type: transaction.type,
+                status: transaction.status,
+                callbackUrl
+            },
+            "[Callback] Sending merchant callback"
+        );
+
         axios.post(callbackUrl, payload, { timeout: 5000, headers }).catch(err => {
-            logger.warn(`[Callback] Failed for ${transaction.id}: ${err.message}`);
+            logger.warn(
+                {
+                    event: "callback.failed",
+                    source: options?.source,
+                    webhookId: options?.webhookId,
+                    merchantId: merchant.id,
+                    transactionId: transaction.id,
+                    orderId: transaction.orderId,
+                    error: err.message
+                },
+                `[Callback] Failed for ${transaction.id}`
+            );
         });
     }
 }

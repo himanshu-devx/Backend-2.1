@@ -8,9 +8,12 @@ import { JobQueue } from "@/utils/job-queue.util";
  * Register all provider fee settlement related cron jobs
  */
 export function registerProviderFeeSettlementJobs() {
+    const eodSchedule = ENV.CRON_PROVIDER_FEE_SETTLEMENT || "0 0 1 * * *";
+    const verificationSchedule = ENV.CRON_SETTLEMENT_VERIFICATION || "0 0 2 * * *";
+
     // 1. EOD Settlement Enqueue (runs at 1 AM by default)
     new CronJob(
-        ENV.CRON_PROVIDER_FEE_SETTLEMENT || "0 0 1 * * *",
+        eodSchedule,
         async () => {
             try {
                 await ProviderFeeSettlementService.enqueueEodSettlement();
@@ -25,7 +28,7 @@ export function registerProviderFeeSettlementJobs() {
 
     // 2. Settlement Verification (runs at 2 AM by default)
     new CronJob(
-        ENV.CRON_SETTLEMENT_VERIFICATION || "0 0 2 * * *",
+        verificationSchedule,
         async () => {
             try {
                 // Verification jobs can also be enqueued for horizontal scaling
@@ -42,5 +45,8 @@ export function registerProviderFeeSettlementJobs() {
         "Asia/Kolkata"
     );
 
-    logger.info("[Cron] Provider Fee Settlement jobs registered");
+    logger.info(
+        { eodSchedule, verificationSchedule, tz: "Asia/Kolkata" },
+        "[Cron] Provider Fee Settlement jobs registered"
+    );
 }

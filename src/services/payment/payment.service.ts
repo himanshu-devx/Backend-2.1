@@ -118,13 +118,58 @@ export class PaymentService {
       return provider.checkPayinStatus(statusRequest);
     });
 
+    const syncEvent = {
+      type: "MANUAL_STATUS_SYNC",
+      timestamp: getISTDate(),
+      payload: {
+        providerStatus: result?.status,
+        providerMsg: result?.message,
+        utr: result?.utr,
+        providerTransactionId: transaction.providerRef,
+        adminEmail,
+        confirm: !!data.confirm,
+      },
+    };
+    transaction.events = transaction.events || [];
+    transaction.events.push(syncEvent as any);
+
     if (!result?.status || result.status === "PENDING") {
+      await transaction.save();
       const payload = (transaction as any)?.toObject ? (transaction as any).toObject() : transaction;
       return mapTransactionAmountsToDisplay(payload);
     }
 
     const nextStatus: "SUCCESS" | "FAILED" =
       result.status === "SUCCESS" ? "SUCCESS" : "FAILED";
+
+    const currentStatus = transaction.status;
+    const terminalStatuses = new Set([
+      TransactionStatus.SUCCESS,
+      TransactionStatus.FAILED,
+      TransactionStatus.REVERSED,
+      TransactionStatus.EXPIRED,
+    ]);
+
+    const statusWouldChange = currentStatus !== nextStatus;
+    const needsConfirmation = terminalStatuses.has(currentStatus) && statusWouldChange;
+
+    if (needsConfirmation && !data.confirm) {
+      await transaction.save();
+      const payload = (transaction as any)?.toObject ? (transaction as any).toObject() : transaction;
+      return {
+        needsConfirmation: true,
+        currentStatus,
+        providerStatus: nextStatus,
+        message: `Provider returned ${nextStatus} but transaction is ${currentStatus}. Confirm to update.`,
+        transaction: mapTransactionAmountsToDisplay(payload),
+      };
+    }
+
+    if (!statusWouldChange) {
+      await transaction.save();
+      const payload = (transaction as any)?.toObject ? (transaction as any).toObject() : transaction;
+      return mapTransactionAmountsToDisplay(payload);
+    }
 
     const updated = await this.applyManualStatusUpdate(transaction, {
       orderId: transaction.orderId,
@@ -164,7 +209,7 @@ export class PaymentService {
       });
       await txn.save();
 
-      MerchantCallbackService.notify(txn);
+      MerchantCallbackService.notify(txn, { source: "MANUAL_EXPIRE" });
       updatedCount += 1;
     }
 
@@ -296,7 +341,7 @@ export class PaymentService {
       await TransactionMonitorService.stopPayoutPolling(transaction.id);
     }
 
-    MerchantCallbackService.notify(transaction);
+    MerchantCallbackService.notify(transaction, { source: "MANUAL_STATUS_UPDATE" });
 
     return (transaction as any)?.toObject ? (transaction as any).toObject() : transaction;
   }
