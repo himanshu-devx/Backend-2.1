@@ -1,0 +1,17 @@
+flowchart LR
+  Merchant([Merchant]) --> API[API Service]
+  Merchant --> Payment[Payment Service]
+  Admin([Admin/Ops]) --> Dashboard[Admin Dashboard]
+  Dashboard --> API
+  Payment --> Provider[External Providers]
+  Provider --> Webhook[Webhook Endpoint]
+  Webhook --> Payment
+  Payment --> Ledger[(Ledger: Postgres)]
+  Payment --> Mongo[(MongoDB)]
+  Payment --> Redis[(Redis)]
+  Worker[Worker Service] --> Redis
+  Worker --> Ledger
+  Worker --> Mongo
+  Observability[(Observability Stack)] <---> API
+  Observability <---> Payment
+  Observability <---> Worker

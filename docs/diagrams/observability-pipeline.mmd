@@ -1,0 +1,31 @@
+flowchart LR
+  subgraph Services
+    API[API Service]
+    Payment[Payment Service]
+    Worker[Worker Service]
+    Frontend[Dashboard]
+  end
+  subgraph Collect["Telemetry Collection"]
+    OTel[OpenTelemetry Collector]
+    PromScrape[Prometheus Scrape]
+  end
+  subgraph Storage["Telemetry Storage"]
+    Loki[Loki]
+    Tempo[Tempo]
+    Metrics[(Prometheus TSDB)]
+  end
+  Grafana[Grafana]
+
+  API --> OTel
+  Payment --> OTel
+  Worker --> OTel
+  Frontend --> OTel
+  API --> PromScrape
+  Payment --> PromScrape
+  Worker --> PromScrape
+  PromScrape --> Metrics
+  OTel --> Loki
+  OTel --> Tempo
+  Metrics --> Grafana
+  Loki --> Grafana
+  Tempo --> Grafana

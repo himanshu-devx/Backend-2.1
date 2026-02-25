@@ -1,0 +1,43 @@
+flowchart TB
+  subgraph Edge["Edge"]
+    LB[Reverse Proxy / Caddy]
+  end
+  subgraph App["App Stack"]
+    API[API Service]
+    Payment[Payment Service]
+    Worker[Worker Service]
+    Frontend[Dashboard Frontend]
+  end
+  subgraph Data["Data Stores"]
+    Postgres[(Postgres / Ledger)]
+    Mongo[(MongoDB)]
+    Redis[(Redis)]
+  end
+  subgraph Obs["Monitoring Stack"]
+    Prom[Prometheus]
+    Loki[Loki]
+    Tempo[Tempo]
+    Grafana[Grafana]
+  end
+  LB --> API
+  LB --> Payment
+  LB --> Frontend
+  API --> Payment
+  Payment --> Postgres
+  Payment --> Mongo
+  Payment --> Redis
+  Worker --> Postgres
+  Worker --> Mongo
+  Worker --> Redis
+  API --> Prom
+  Payment --> Prom
+  Worker --> Prom
+  API --> Loki
+  Payment --> Loki
+  Worker --> Loki
+  API --> Tempo
+  Payment --> Tempo
+  Worker --> Tempo
+  Grafana --> Prom
+  Grafana --> Loki
+  Grafana --> Tempo

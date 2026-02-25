@@ -1,0 +1,50 @@
+flowchart TB
+  subgraph Internet
+    Merchant([Merchant])
+    Admin([Admin/Ops])
+  end
+  subgraph DMZ["Edge / DMZ"]
+    Caddy[Reverse Proxy / Caddy]
+  end
+  subgraph App["App Network"]
+    API[API Service]
+    Payment[Payment Service]
+    Worker[Worker Service]
+    Frontend[Dashboard Frontend]
+  end
+  subgraph Data["Data Network"]
+    Postgres[(Postgres)]
+    Mongo[(MongoDB)]
+    Redis[(Redis)]
+  end
+  subgraph Obs["Monitoring Network"]
+    Prom[Prometheus]
+    Loki[Loki]
+    Tempo[Tempo]
+    Grafana[Grafana]
+  end
+
+  Merchant --> Caddy
+  Admin --> Caddy
+  Caddy --> API
+  Caddy --> Payment
+  Caddy --> Frontend
+  API --> Payment
+  Payment --> Postgres
+  Payment --> Mongo
+  Payment --> Redis
+  Worker --> Postgres
+  Worker --> Mongo
+  Worker --> Redis
+  API --> Prom
+  Payment --> Prom
+  Worker --> Prom
+  API --> Loki
+  Payment --> Loki
+  Worker --> Loki
+  API --> Tempo
+  Payment --> Tempo
+  Worker --> Tempo
+  Grafana --> Prom
+  Grafana --> Loki
+  Grafana --> Tempo

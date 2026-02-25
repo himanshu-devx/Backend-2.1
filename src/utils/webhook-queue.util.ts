@@ -45,6 +45,7 @@ export class WebhookQueue {
             );
         } catch (error: any) {
             logger.error(`[WebhookQueue] Failed to enqueue: ${error.message}`);
+            throw error;
         }
     }
 

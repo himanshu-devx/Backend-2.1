@@ -1,0 +1,50 @@
+erDiagram
+  MERCHANT ||--o{ TRANSACTION : initiates
+  MERCHANT ||--o{ PAYOUT : requests
+  PROVIDER ||--o{ PROVIDER_CHANNEL : offers
+  TRANSACTION }o--|| PROVIDER_CHANNEL : routes_via
+  PAYOUT }o--|| PROVIDER_CHANNEL : routes_via
+  TRANSACTION ||--o{ LEDGER_ENTRY : posts
+  PAYOUT ||--o{ LEDGER_ENTRY : posts
+  LEDGER_ACCOUNT ||--o{ LEDGER_ENTRY : contains
+
+  MERCHANT {
+    string id
+    string name
+    string status
+  }
+  TRANSACTION {
+    string id
+    string merchant_id
+    string provider_ref
+    string status
+    number amount
+  }
+  PAYOUT {
+    string id
+    string merchant_id
+    string provider_ref
+    string status
+    number amount
+  }
+  PROVIDER {
+    string id
+    string name
+  }
+  PROVIDER_CHANNEL {
+    string id
+    string provider_id
+    string channel_code
+  }
+  LEDGER_ACCOUNT {
+    string id
+    string name
+    string type
+  }
+  LEDGER_ENTRY {
+    string id
+    string account_id
+    string ref_id
+    number amount
+    string direction
+  }

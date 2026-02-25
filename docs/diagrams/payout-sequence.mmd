@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant Merchant
+  participant API
+  participant Payment
+  participant Provider
+  participant Worker
+  participant Ledger
+  participant Mongo
+  participant Redis
+
+  Merchant->>API: Initiate Payout (signed)
+  API->>Payment: Validate + create payout
+  Payment->>Provider: Create provider payout
+  Provider-->>Payment: Provider reference
+  Payment->>Mongo: Persist payout
+  Payment->>Ledger: Reserve/authorize entries
+  Payment->>Redis: Enqueue polling job
+  Worker->>Provider: Poll payout status
+  Provider-->>Worker: Status update
+  Worker->>Payment: Publish status change
+  Payment->>Mongo: Update status
+  Payment->>Ledger: Post final entries
+  Payment-->>Merchant: Callback / status update

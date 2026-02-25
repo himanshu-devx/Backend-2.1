@@ -16,6 +16,7 @@ import { TpsService } from "@/services/common/tps.service";
 import { PaymentLedgerService } from "@/services/payment/payment-ledger.service";
 import { mapFeeDetailToStorage, toDisplayAmount, toStorageAmount } from "@/utils/money.util";
 import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
+import { MerchantCallbackService } from "@/services/payment/merchant-callback.service";
 import { redis } from "@/infra/redis-instance";
 import { RedisKeys } from "@/constants/redis.constant";
 
@@ -297,6 +298,8 @@ export class PayinWorkflow extends BasePaymentWorkflow<
                 },
                 "[PayinWorkflow] Ledger credited"
                 );
+
+            MerchantCallbackService.notify(this.transaction, { source: "PROVIDER_INITIATED" });
         }
 
         if (this.transaction?.status === TransactionStatus.PENDING) {

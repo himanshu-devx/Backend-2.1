@@ -102,7 +102,7 @@ export class WebhookWorkflow {
             transaction.events.push({
                 type: "WEBHOOK_DUPLICATE",
                 timestamp: getISTDate(),
-                payload: result
+                payload: { rawBody }
             });
             await transaction.save();
             if (resolvedType === "PAYOUT") {
@@ -129,7 +129,11 @@ export class WebhookWorkflow {
         try {
             if (result.status === "SUCCESS") {
                 transaction.status = TransactionStatus.SUCCESS;
-                transaction.events.push({ type: "WEBHOOK_SUCCESS", timestamp: getISTDate(), payload: result });
+                transaction.events.push({
+                    type: "WEBHOOK_SUCCESS",
+                    timestamp: getISTDate(),
+                    payload: { rawBody }
+                });
 
                 // Execute Financial Transition
                 if (resolvedType === "PAYIN") {
@@ -140,7 +144,11 @@ export class WebhookWorkflow {
             } else if (result.status === "FAILED") {
                 transaction.status = TransactionStatus.FAILED;
                 transaction.error = result.message || "Provider reported failure";
-                transaction.events.push({ type: "WEBHOOK_FAILED", timestamp: getISTDate(), payload: result });
+                transaction.events.push({
+                    type: "WEBHOOK_FAILED",
+                    timestamp: getISTDate(),
+                    payload: { rawBody }
+                });
 
                 if (resolvedType === "PAYOUT") {
                     await PaymentLedgerService.voidPayout(transaction);

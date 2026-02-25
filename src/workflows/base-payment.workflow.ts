@@ -2,6 +2,7 @@ import { TransactionModel, TransactionDocument, TransactionStatus } from "@/mode
 import { logger } from "@/infra/logger-instance";
 import { getISTDate } from "@/utils/date.util";
 import { AppError } from "@/utils/error";
+import { MerchantCallbackService } from "@/services/payment/merchant-callback.service";
 
 export abstract class BasePaymentWorkflow<
     T_DTO,
@@ -165,6 +166,7 @@ export abstract class BasePaymentWorkflow<
         );
 
         if (this.transaction) {
+            const previousStatus = this.transaction.status;
             this.transaction.status = TransactionStatus.FAILED;
             this.transaction.error = error.message;
             this.transaction.events.push({
@@ -173,6 +175,9 @@ export abstract class BasePaymentWorkflow<
                 payload: { error: error.message }
             });
             await this.transaction.save();
+            if (previousStatus !== TransactionStatus.FAILED) {
+                MerchantCallbackService.notify(this.transaction, { source: "WORKFLOW_FAILED" });
+            }
         }
 
         if (!(error instanceof AppError)) {

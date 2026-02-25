@@ -1,0 +1,7 @@
+flowchart LR
+  Dev[Developer Push] --> CI[CI: Lint + Test + Build]
+  CI --> Artifacts[Artifact Registry]
+  Artifacts --> Deploy[Ansible Deploy]
+  Deploy --> Env[Client Environments]
+  Env --> Verify[Smoke Checks]
+  Verify --> Monitor[Monitoring + Alerts]

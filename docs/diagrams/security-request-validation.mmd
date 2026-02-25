@@ -1,0 +1,11 @@
+flowchart TB
+  Request[Incoming Request] --> HMAC[Verify HMAC Signature]
+  HMAC -->|valid| TS[Validate Timestamp Window]
+  HMAC -->|invalid| Reject1[Reject 401]
+  TS -->|valid| IP[Check IP Whitelist]
+  TS -->|invalid| Reject2[Reject 401]
+  IP -->|allowed| Rate[Rate Limit / TPS Guard]
+  IP -->|blocked| Reject3[Reject 403]
+  Rate -->|ok| Auth[Attach Merchant Context]
+  Rate -->|blocked| Reject4[Reject 429]
+  Auth --> Controller[Route to Controller]

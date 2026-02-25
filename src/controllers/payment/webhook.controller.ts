@@ -3,6 +3,9 @@ import { logger } from "@/infra/logger-instance";
 import { WebhookQueue } from "@/utils/webhook-queue.util";
 import { getISTDate } from "@/utils/date.util";
 import crypto from "node:crypto";
+import { WebhookWorkflow } from "@/workflows/webhook.workflow";
+
+const webhookWorkflow = new WebhookWorkflow();
 
 export class WebhookController {
     /**
@@ -32,23 +35,48 @@ export class WebhookController {
         );
 
         try {
-            // Queue for Async Processing directly with payload (JSON)
-            await WebhookQueue.enqueue({
+            const result = await webhookWorkflow.execute(
                 type,
                 providerId,
                 legalEntityId,
-                webhookId,
-                rawBody
-            });
+                rawBody,
+                webhookId
+            );
 
             return c.json({
                 success: true,
-                message: "Webhook accepted for processing"
+                message: "Webhook processed",
+                data: {
+                    transactionId: result?.transaction?.id,
+                    alreadyProcessed: result?.alreadyProcessed ?? false,
+                    webhookId,
+                }
             });
-
         } catch (error: any) {
-            logger.error(`[Webhook Producer] Critical Error: ${error.message}`);
-            return c.json({ success: false, error: "Internal processing failure" }, 500);
+            logger.error({ error: error.message, webhookId }, "[Webhook Producer] Sync processing failed");
+
+            // Fallback to async processing for retries / eventual consistency
+            try {
+                await WebhookQueue.enqueue({
+                    type,
+                    providerId,
+                    legalEntityId,
+                    webhookId,
+                    rawBody
+                });
+            } catch (queueError: any) {
+                logger.error(
+                    { error: queueError.message, webhookId },
+                    "[Webhook Producer] Failed to enqueue webhook fallback"
+                );
+                return c.json({ success: false, error: "Webhook processing failed" }, 500);
+            }
+
+            return c.json({
+                success: true,
+                message: "Webhook queued for async processing",
+                data: { webhookId }
+            });
         }
     }
 

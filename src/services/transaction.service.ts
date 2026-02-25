@@ -400,6 +400,7 @@ export class TransactionService {
     });
 
     await txn.save();
+    MerchantCallbackService.notify(txn, { source: "TRANSACTION_REVERSED" });
     return ok({
       transactionId: txn.id,
       status: txn.status,
@@ -592,21 +593,15 @@ export class TransactionService {
     const txn = await TransactionModel.findOne({ id });
     if (!txn) return err(NotFound("Transaction not found"));
 
-    MerchantCallbackService.notify(txn, { source: "ADMIN_RESEND" });
-
-    txn.events.push({
-      type: "ADMIN_RESEND_WEBHOOK",
-      timestamp: getISTDate(),
-      payload: {
-        reason,
-        actor: {
-          id: actor.id,
-          email: actor.email,
-          role: actor.role,
-        },
+    MerchantCallbackService.notify(txn, {
+      source: "ADMIN_RESEND",
+      reason,
+      actor: {
+        id: actor.id,
+        email: actor.email,
+        role: actor.role,
       },
     });
-    await txn.save();
 
     return ok({ transactionId: txn.id, status: txn.status, resent: true });
   }

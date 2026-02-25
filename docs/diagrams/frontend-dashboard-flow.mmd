@@ -1,0 +1,9 @@
+flowchart LR
+  User[Ops/Admin User] --> UI[Dashboard UI]
+  UI --> Auth[Session/Token]
+  Auth --> API[API Service]
+  API --> Payment[Payment Service]
+  Payment --> Mongo[(MongoDB)]
+  Payment --> Ledger[(Ledger / Postgres)]
+  UI --> Reports[Exports/Reports]
+  Reports --> API

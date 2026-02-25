@@ -1,0 +1,22 @@
+sequenceDiagram
+  participant Merchant
+  participant API
+  participant Payment
+  participant Provider
+  participant Webhook
+  participant Ledger
+  participant Mongo
+  participant Redis
+
+  Merchant->>API: Initiate Payin (signed)
+  API->>Payment: Validate + create payin
+  Payment->>Provider: Create provider payin
+  Provider-->>Payment: Provider reference
+  Payment->>Mongo: Persist transaction + metadata
+  Payment->>Ledger: Reserve/authorize entries
+  Payment->>Redis: Enqueue status job
+  Provider-->>Webhook: Payin status update
+  Webhook->>Payment: Webhook received
+  Payment->>Mongo: Update status
+  Payment->>Ledger: Post final entries
+  Payment-->>Merchant: Callback / status update

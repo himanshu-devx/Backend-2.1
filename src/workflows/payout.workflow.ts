@@ -19,6 +19,7 @@ import { ENV } from "@/config/env";
 import { logger } from "@/infra/logger-instance";
 import { mapFeeDetailToStorage, toStorageAmount } from "@/utils/money.util";
 import { TransactionMonitorService } from "@/services/payment/transaction-monitor.service";
+import { MerchantCallbackService } from "@/services/payment/merchant-callback.service";
 
 export class PayoutWorkflow extends BasePaymentWorkflow<
     InitiatePayoutDto,
@@ -274,6 +275,7 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
 
     protected async postExecute(result: ProviderPayoutResult): Promise<void> {
         if (result.success) {
+            const previousStatus = this.transaction.status;
             this.transaction.providerRef = result.providerTransactionId;
             this.transaction.status = result.status as any;
             this.transaction.utr = result.utr;
@@ -298,6 +300,10 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
                 },
                 "[PayoutWorkflow] Provider initiated"
             );
+
+            if (previousStatus !== this.transaction.status) {
+                MerchantCallbackService.notify(this.transaction, { source: "PROVIDER_INITIATED" });
+            }
 
             if (
                 this.transaction.status === TransactionStatus.PENDING ||
