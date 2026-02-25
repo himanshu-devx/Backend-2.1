@@ -248,7 +248,7 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
                         providerId: channel.providerId,
                         legalEntityId: channel.legalEntityId,
                         providerStatus: result.status,
-                        providerMessage: result.message,
+                        providerMessage: result.providerMsg || result.message,
                         providerResponse: result,
                     });
                 }

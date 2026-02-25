@@ -408,10 +408,21 @@ export class PaymentError extends Error {
      */
     toMerchantJSON() {
         if (this.isMerchantFacing) {
+            let message = this.message;
+            if (this.code === PaymentErrorCode.PROVIDER_REJECTED) {
+                const providerId = String(this.details?.providerId || "").toLowerCase();
+                const providerMessage =
+                    this.details?.providerMessage ||
+                    this.details?.providerResponse?.providerMsg ||
+                    this.details?.providerResponse?.message;
+                if (providerId === "atis" && typeof providerMessage === "string" && providerMessage.trim()) {
+                    message = providerMessage.trim();
+                }
+            }
             return {
                 error: {
                     code: this.code,
-                    message: this.message,
+                    message,
                     description: this.description,
                     retryable: this.retryable
                 }

@@ -171,9 +171,6 @@ export class TpipayProvider extends BaseProvider {
       ) as ProviderPayinResult;
     }
 
-    const providerOrderId =
-      resolveNumericId(req.transactionId, req.orderId) ||
-      `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
     const payload: Record<string, any> = {
       api_token: apiToken,
@@ -181,7 +178,7 @@ export class TpipayProvider extends BaseProvider {
       mobile: req.customerPhone,
       name: req.customerName,
       email: req.customerEmail,
-      order_id: providerOrderId,
+      order_id: req.transactionId,
     };
 
     if (req.callbackUrl) {
@@ -215,8 +212,6 @@ export class TpipayProvider extends BaseProvider {
       const gatewayOrderId =
         resp.gateway_order_id ??
         data.gateway_order_id ??
-        resp.order_id ??
-        data.order_id ??
         data.gatewayOrderId ??
         resp.gatewayOrderId;
 
@@ -257,7 +252,7 @@ export class TpipayProvider extends BaseProvider {
         message: resp.message || data.message || "Transaction Created",
         providerMsg: resp.message || data.message,
         transactionId: req.transactionId,
-        providerTransactionId: providerOrderId,
+        providerTransactionId: gatewayOrderId as string,
         amount: toNumber(resp.amount ?? data.amount) ?? req.amount,
         result: qrString,
       };
@@ -527,6 +522,9 @@ export class TpipayProvider extends BaseProvider {
   ): Promise<ProviderWebhookResult> {
     const payload = parseJsonBody(input.rawBody) as TpipayWebhookPayload;
 
+
+
+
     const transactionId = String(
       payload.order_id ||
         payload.orderId ||
@@ -552,7 +550,6 @@ export class TpipayProvider extends BaseProvider {
       payload.gateway_order_id ??
       payload.gatewayOrderId ??
       payload.transaction_id ??
-      payload.order_id ??
       payload.externalTxnId
       
     return {
