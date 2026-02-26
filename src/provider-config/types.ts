@@ -51,6 +51,7 @@ export interface PayinRequest {
 export interface PayoutRequest {
   amount: number;
   transactionId: string;
+  orderId?: string;
   beneficiaryName?: string;
   beneficiaryAccountNumber?: string;
   beneficiaryBankIfsc?: string;

@@ -208,6 +208,7 @@ export class PayoutWorkflow extends BasePaymentWorkflow<
                 const providerRequest = {
                     amount: dto.amount,
                     transactionId: this.transaction.id,
+                    orderId: dto.orderId,
                     beneficiaryName: dto.beneficiaryName,
                     beneficiaryAccountNumber: dto.beneficiaryAccountNumber,
                     beneficiaryBankIfsc: dto.beneficiaryIfsc,

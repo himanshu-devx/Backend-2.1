@@ -6,6 +6,7 @@ import { SabioPayProvider } from "./sabiopay.provider";
 import { EaseMyNeedsProvider } from "./easemyneeds.provider";
 import { TpipayProvider } from "./tpipay.provider";
 import { PayprimeProvider } from "./payprime.provider";
+import { PaysixProvider } from "./paysix.provider";
 
 type CredentialKeyMap = Record<string, string>;
 
@@ -64,6 +65,14 @@ const PayprimeCredentialsSchema = z
   })
   .strict();
 
+const PaysixCredentialsSchema = z
+  .object({
+    merchantId: z.string().min(1),
+    apiSecret: z.string().min(1),
+    baseUrl: z.string().url().optional(),
+  })
+  .strict();
+
 export const PROVIDER_REGISTRY = {
   dummy: {
     credentialsSchema: DummyCredentialsSchema,
@@ -85,6 +94,10 @@ export const PROVIDER_REGISTRY = {
   payprime: {
     credentialsSchema: PayprimeCredentialsSchema,
     create: (config) => new PayprimeProvider(config),
+  },
+  paysix: {
+    credentialsSchema: PaysixCredentialsSchema,
+    create: (config) => new PaysixProvider(config),
   },
 
 } satisfies Record<string, ProviderRegistration<Record<string, string>>>;
