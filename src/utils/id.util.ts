@@ -39,3 +39,15 @@ export const generateCustomId = async (
   const seq = await getNextSequence(sequenceName);
   return `${prefix}-${seq}`;
 };
+
+
+
+export const extractNumericOrderId = (transactionId?: string): string | null => {
+  if (!transactionId) return null;
+  const trimmed = transactionId.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/\d+$/); // get trailing digits
+  if (match) return match[0];
+  const digits = trimmed.replace(/\D/g, "");
+  return digits ? digits : null;
+};

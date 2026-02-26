@@ -11,6 +11,9 @@ import type {
   ProviderWebhookResult,
   StatusRequest,
 } from "./types";
+import { extractNumericOrderId } from "@/utils/id.util";
+import { ENV } from "@/config/env";
+import { randomInt } from "crypto";
 
 type TpipayCreateResponse = {
   status?: string;
@@ -130,14 +133,25 @@ const toNumber = (value?: number | string): number | undefined => {
   return Number.isFinite(num) ? num : undefined;
 };
 
-const resolveNumericId = (...candidates: Array<string | undefined>): string | null => {
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    const trimmed = candidate.trim();
-    if (trimmed && /^[0-9]+$/.test(trimmed)) return trimmed;
-  }
-  return null;
+const buildTpipayTransactionId = (rawTransactionId: string): string => {
+  const trimmed = rawTransactionId.trim();
+  if (!trimmed) return "";
+  if (!/^\d+$/.test(trimmed)) return trimmed;
+
+  const rawPrefix = ENV.APP_BRAND_PREFIX || ENV.APP_BRAND_NAME || "TXN";
+  let prefix = rawPrefix.replace(/[^a-zA-Z]/g, "").substring(0, 4).toUpperCase();
+  if (!prefix) prefix = "TXN";
+
+  return `${prefix}-${trimmed}`;
 };
+
+const generateTpipayOrderId = (): string => {
+  const timestamp = Date.now().toString();
+  const random = randomInt(0, 1000).toString().padStart(3, "0");
+  return `${timestamp}${random}`;
+};
+
+
 
 const normalizePayoutMode = (mode?: string): "IMPS" | "NEFT" | "RTGS" => {
   const normalized = (mode || "").toUpperCase();
@@ -171,6 +185,8 @@ export class TpipayProvider extends BaseProvider {
       ) as ProviderPayinResult;
     }
 
+    // ✅ Always generate compliant provider order id
+    const tpipayOrderId = generateTpipayOrderId();
 
     const payload: Record<string, any> = {
       api_token: apiToken,
@@ -178,12 +194,8 @@ export class TpipayProvider extends BaseProvider {
       mobile: req.customerPhone,
       name: req.customerName,
       email: req.customerEmail,
-      order_id: req.transactionId,
+      order_id: tpipayOrderId,
     };
-
-    if (req.callbackUrl) {
-      // payload.callback_url
-    }
 
     const url = buildUrl(baseUrl, "/createorder");
 
@@ -196,24 +208,22 @@ export class TpipayProvider extends BaseProvider {
         context: {
           action: "payin_create",
           transactionId: req.transactionId,
-          orderId: req.orderId,
+          providerId: tpipayOrderId as string,
+          orderId: req.orderId
         },
       });
 
       const resp = response?.data || {};
       const data = resp?.data || {};
+
       const statusRaw = resp.status || data.status || "";
       const statusNormalized = statusRaw.toLowerCase();
+
       const qrString =
         resp.qrString ||
         resp.qr_string ||
         data.qrString ||
         data.qr_string;
-      const gatewayOrderId =
-        resp.gateway_order_id ??
-        data.gateway_order_id ??
-        data.gatewayOrderId ??
-        resp.gatewayOrderId;
 
       const isSuccess =
         statusNormalized === "success" ||
@@ -222,20 +232,17 @@ export class TpipayProvider extends BaseProvider {
           statusNormalized !== "validation_error");
 
       if (!isSuccess) {
-        const isValidationError = statusNormalized === "validation_error";
-        const message =
-          resp.message ||
-          data.message ||
-          (isValidationError ? "TPIPAY validation error" : "TPIPAY payin failed");
-
         return {
           type: "payin",
           success: false,
           status: "FAILED",
-          message,
+          message:
+            resp.message ||
+            data.message ||
+            "TPIPAY payin failed",
           providerMsg: resp.message,
           transactionId: req.transactionId,
-          providerTransactionId: gatewayOrderId as string || "",
+          providerTransactionId: tpipayOrderId,
           amount: req.amount,
           error: resp,
         };
@@ -249,10 +256,13 @@ export class TpipayProvider extends BaseProvider {
         type: "payin",
         success: true,
         status: "PENDING",
-        message: resp.message || data.message || "Transaction Created",
+        message:
+          resp.message ||
+          data.message ||
+          "Transaction Created",
         providerMsg: resp.message || data.message,
         transactionId: req.transactionId,
-        providerTransactionId: gatewayOrderId as string,
+        providerTransactionId: tpipayOrderId, // ✅ IMPORTANT
         amount: toNumber(resp.amount ?? data.amount) ?? req.amount,
         result: qrString,
       };
@@ -261,10 +271,12 @@ export class TpipayProvider extends BaseProvider {
         {
           providerId: this.providerId,
           transactionId: req.transactionId,
+          providerOrderId: tpipayOrderId,
           error: error?.message,
         },
         "[TPIPAY] Payin failed"
       );
+
       return this.formatErrorResponse(
         "payin",
         req.transactionId,
@@ -386,7 +398,7 @@ export class TpipayProvider extends BaseProvider {
     const creds = this.config.credentials || {};
     const apiToken = creds.apiToken;
     const baseUrl = creds.baseUrl || DEFAULT_BASE_URL;
-    const orderId = req.transactionId || req.providerTransactionId;
+    const orderId =req.providerTransactionId;
 
     if (!apiToken) {
       return {
@@ -522,17 +534,17 @@ export class TpipayProvider extends BaseProvider {
   ): Promise<ProviderWebhookResult> {
     const payload = parseJsonBody(input.rawBody) as TpipayWebhookPayload;
 
-
-
-
-    const transactionId = String(
-      payload.order_id ||
-        payload.orderId ||
-        payload.externalTxnId ||
-        payload.transaction_id ||
-        ""
+    const providerTransactionId = String(
+      payload.order_id ??
+      payload.orderId ??
+      payload.externalTxnId ??
+      payload.transaction_id ??
+      payload.gateway_order_id ??
+      payload.gatewayOrderId ??
+      ""
     ).trim();
-    if (!transactionId) {
+
+    if (!providerTransactionId) {
       throw new Error("TPIPAY webhook missing order_id");
     }
 
@@ -546,25 +558,20 @@ export class TpipayProvider extends BaseProvider {
         : status === "PENDING"
           ? `${messageBase} Pending`
           : `${messageBase} Success`);
-    const providerTransactionId =
-      payload.gateway_order_id ??
-      payload.gatewayOrderId ??
-      payload.transaction_id ??
-      payload.externalTxnId
-      
+
+
     return {
       type: "webhook",
       success: true,
       status,
       message,
       providerMsg: payload.message || payload.status,
-      transactionId,
+      transactionId: "",
       providerTransactionId: providerTransactionId
         ? String(providerTransactionId)
         : undefined,
       amount,
       utr: payload.utr || payload.bank_ref_no,
-      
     };
   }
 }

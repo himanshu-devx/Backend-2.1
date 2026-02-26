@@ -18,14 +18,62 @@ export class MerchantCallbackService {
         }
     ) {
         try {
-            if (!transaction?.merchantId) return;
-            if (transaction.status === "PENDING" || transaction.status === "PROCESSING") return;
+            if (!transaction?.merchantId) {
+                logger.warn(
+                    {
+                        event: "callback.skip",
+                        reason: "missing_merchant_id",
+                        transactionId: transaction?.id,
+                        orderId: transaction?.orderId
+                    },
+                    "[Callback] Skipped merchant callback"
+                );
+                return;
+            }
+            if (transaction.status === "PENDING" || transaction.status === "PROCESSING") {
+                logger.info(
+                    {
+                        event: "callback.skip",
+                        reason: "status_pending",
+                        transactionId: transaction.id,
+                        orderId: transaction.orderId,
+                        status: transaction.status
+                    },
+                    "[Callback] Skipped merchant callback"
+                );
+                return;
+            }
             const merchant = await CacheService.getMerchant(transaction.merchantId);
-            if (!merchant) return;
+            if (!merchant) {
+                logger.warn(
+                    {
+                        event: "callback.skip",
+                        reason: "merchant_not_found",
+                        merchantId: transaction.merchantId,
+                        transactionId: transaction.id,
+                        orderId: transaction.orderId
+                    },
+                    "[Callback] Skipped merchant callback"
+                );
+                return;
+            }
 
             const callbackUrl =
                 transaction.type === "PAYIN" ? merchant.payin?.callbackUrl : merchant.payout?.callbackUrl;
-            if (!callbackUrl) return;
+            if (!callbackUrl) {
+                logger.warn(
+                    {
+                        event: "callback.skip",
+                        reason: "callback_url_missing",
+                        merchantId: merchant.id,
+                        transactionId: transaction.id,
+                        orderId: transaction.orderId,
+                        type: transaction.type
+                    },
+                    "[Callback] Skipped merchant callback"
+                );
+                return;
+            }
 
             const eventType =
                 options?.source === "ADMIN_RESEND"
@@ -82,7 +130,8 @@ export class MerchantCallbackService {
                     orderId: transaction.orderId,
                     type: transaction.type,
                     status: transaction.status,
-                    callbackUrl
+                    callbackUrl,
+                    payload
                 },
                 "[Callback] Sending merchant callback"
             );
@@ -102,20 +151,40 @@ export class MerchantCallbackService {
             });
             await transaction.save();
 
-            axios.post(callbackUrl, payload, { timeout: 5000, headers }).catch(err => {
-                logger.warn(
-                    {
-                        event: "callback.failed",
-                        source: options?.source,
-                        webhookId: options?.webhookId,
-                        merchantId: merchant.id,
-                        transactionId: transaction.id,
-                        orderId: transaction.orderId,
-                        error: err.message
-                    },
-                    `[Callback] Failed for ${transaction.id}`
-                );
-            });
+            axios
+                .post(callbackUrl, payload, { timeout: 10000, headers })
+                .then(response => {
+                    logger.info(
+                        {
+                            event: "callback.response",
+                            source: options?.source,
+                            webhookId: options?.webhookId,
+                            merchantId: merchant.id,
+                            transactionId: transaction.id,
+                            orderId: transaction.orderId,
+                            status: response.status,
+                            response: response.data
+                        },
+                        "[Callback] Merchant responded"
+                    );
+                })
+                .catch(err => {
+                    const response = axios.isAxiosError(err) ? err.response : undefined;
+                    logger.warn(
+                        {
+                            event: "callback.failed",
+                            source: options?.source,
+                            webhookId: options?.webhookId,
+                            merchantId: merchant.id,
+                            transactionId: transaction.id,
+                            orderId: transaction.orderId,
+                            error: err.message,
+                            status: response?.status,
+                            response: response?.data
+                        },
+                        `[Callback] Failed for ${transaction.id}`
+                    );
+                });
         } catch (error: any) {
             logger.error(
                 { error: error.message, transactionId: transaction?.id, source: options?.source },
